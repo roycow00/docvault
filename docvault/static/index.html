@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>docvault</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>docvault</h1>
+    <input id="search" type="search" placeholder="Search title, intro, tags…" autofocus />
+    <span class="count" id="count"></span>
+  </header>
+
+  <main>
+    <table id="docs">
+      <thead>
+        <tr>
+          <th class="col-title">Title</th>
+          <th class="col-tags">Tags</th>
+          <th class="col-date">Ingested</th>
+          <th class="col-size">Size</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty hidden">No documents yet. Use <code>docvault ingest &lt;file&gt;</code> on the command line, or right-click a file in Windows Explorer.</p>
+  </main>
+
+  <dialog id="delete-dialog">
+    <form method="dialog">
+      <h2>Delete <span id="del-title"></span></h2>
+      <p class="muted">
+        <span id="del-loc-type"></span> &middot; <code id="del-path"></code>
+      </p>
+      <div class="actions">
+        <button value="entry_only">Delete database entry only<br><small>Keep the file untouched at its current location.</small></button>
+        <button value="entry_and_file">Delete database entry and file<br><small>Move both to trash; recoverable for 90 days.</small></button>
+        <button value="entry_and_reveal">Delete database entry, then reveal file in Explorer<br><small>Lets you handle the file yourself.</small></button>
+        <button value="cancel" class="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

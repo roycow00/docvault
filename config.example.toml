@@ -1,0 +1,36 @@
+# docvault configuration template.
+# Copy to <vault>/config.toml and edit. Resolution order:
+#   1. --config <path> CLI flag
+#   2. <vault_root>/config.toml
+#   3. ~/.config/docvault/config.toml
+
+vault_root  = "C:\\docvault-data"     # macOS dev: "/Users/you/docvault-data"
+server_port = 7777
+
+[llm]
+provider        = "claude"             # "claude" | "openai_compat"
+max_input_chars = 120000
+
+[llm.claude]
+api_key_env      = "ANTHROPIC_API_KEY" # env var to read; or set api_key directly
+model            = "claude-haiku-4-5-20251001"
+use_prompt_cache = true
+
+[llm.openai_compat]
+# Examples (Mac running Ollama or LM Studio, reachable from Windows):
+#   Qwen3 (text):        model = "qwen3:14b",     local_multimodal = false
+#   Qwen2.5-VL (vision): model = "qwen2.5-vl:7b", local_multimodal = true
+base_url         = "http://mac.local:11434/v1"
+model            = "qwen3:14b"
+api_key          = "ollama"
+local_multimodal = false
+
+[ingest]
+on_duplicate   = "open_existing"       # "open_existing" | "skip" | "prompt"
+suggested_tags = ["Immigration", "House", "Shopping", "School", "Finance", "Tax"]
+
+[cleanup]
+retention_days = 30                    # how long .pending-cleanup/ keeps orphaned source files
+
+[trash]
+retention_days = 90                    # how long deleted entries/files stay recoverable
