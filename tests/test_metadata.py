@@ -36,7 +36,7 @@ def _make_external() -> M.Metadata:
         original_filename="passport.pdf",
         location=M.Location(
             type="external",
-            path=r"C:\Users\rcow\OneDrive\Personal Vault\passport.pdf",
+            path=r"C:\Users\roycow00\OneDrive\Personal Vault\passport.pdf",
             source="onedrive_personal_vault",
         ),
         mime="application/pdf",
@@ -106,17 +106,17 @@ def test_safe_name_strips_windows_illegal() -> None:
 
 
 def test_is_protected_source_onedrive_english() -> None:
-    p = r"C:\Users\rcow\OneDrive\Personal Vault\passport.pdf"
+    p = r"C:\Users\roycow00\OneDrive\Personal Vault\passport.pdf"
     assert P.is_protected_source(p) == "onedrive_personal_vault"
 
 
 def test_is_protected_source_onedrive_chinese() -> None:
-    p = r"C:\Users\rcow\OneDrive\个人保管库\passport.pdf"
+    p = r"C:\Users\roycow00\OneDrive\个人保管库\passport.pdf"
     assert P.is_protected_source(p) == "onedrive_personal_vault"
 
 
 def test_is_protected_source_normal_path_returns_none() -> None:
-    assert P.is_protected_source(r"C:\Users\rcow\Documents\foo.pdf") is None
+    assert P.is_protected_source(r"C:\Users\roycow00\Documents\foo.pdf") is None
 
 
 def test_paths_round_trip(vault: Path) -> None:
