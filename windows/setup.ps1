@@ -153,6 +153,12 @@ if (Test-Path -LiteralPath (Join-Path $VaultPath 'config.toml')) {
     if ($LASTEXITCODE -ne 0) { throw "init-vault failed" }
 }
 
+# Persist DOCVAULT_VAULT so plain `docvault serve` (and the right-click .bat
+# launchers) find <vault>\config.toml without needing --config every time.
+[Environment]::SetEnvironmentVariable("DOCVAULT_VAULT", $VaultPath, "User")
+$env:DOCVAULT_VAULT = $VaultPath
+Write-Host "[setup] set DOCVAULT_VAULT = $VaultPath (user env, persistent)"
+
 # --- 5. Register Explorer right-click verbs (optional) ------------------------
 
 if ($SkipContextMenu) {

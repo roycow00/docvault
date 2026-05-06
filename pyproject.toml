@@ -17,6 +17,7 @@ dependencies = [
     "anthropic>=0.40",
     "openai>=1.40",
     "pypdf>=4.0",
+    "pypdfium2>=4.30",
     "python-docx>=1.1",
 ]
 

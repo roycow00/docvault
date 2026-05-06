@@ -27,6 +27,7 @@ class LLMProvider(Protocol):
         mime: str,
         filename: str,
         note: str | None = None,
+        images: list[tuple[str, bytes]] | None = None,
     ) -> MetadataDraft: ...
 
 

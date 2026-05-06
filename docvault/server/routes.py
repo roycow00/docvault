@@ -312,6 +312,23 @@ def build_router(cfg: Config) -> APIRouter:
         # Extract text for the LLM.
         ext = EXT.extract_text(src, max_chars=cfg.llm.max_input_chars)
 
+        # If vision is on and we got NO usable text from the document
+        # (scanned PDF, image file, OCR-less office doc), rasterize and let
+        # the model read the pixels. When text *is* available, skip vision —
+        # it adds thousands of vision tokens, slows the call, and on
+        # multi-page born-digital docs frequently overflows the model's
+        # context window or crashes the runtime.
+        images: list[tuple[str, bytes]] = []
+        oc = cfg.llm.openai_compat
+        if (
+            cfg.llm.provider == "openai_compat"
+            and oc.local_multimodal
+            and not ext.text.strip()
+        ):
+            images = EXT.extract_images(
+                src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
+            )
+
         # Call LLM.
         ai_title = ai_intro = ""
         ai_tags: list[str] = []
@@ -319,7 +336,8 @@ def build_router(cfg: Config) -> APIRouter:
         try:
             provider = get_provider(cfg)
             draft_md = provider.extract_metadata(
-                text=ext.text, mime=ext.mime, filename=src.name, note=ext.note
+                text=ext.text, mime=ext.mime, filename=src.name, note=ext.note,
+                images=images or None,
             )
             ai_title = draft_md.get("title", "")
             ai_intro = draft_md.get("intro", "")

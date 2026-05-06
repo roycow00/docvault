@@ -228,6 +228,17 @@ def ingest_ai(
 
     ext = EXT.extract_text(src_resolved, max_chars=cfg.llm.max_input_chars)
 
+    images: list[tuple[str, bytes]] = []
+    oc = cfg.llm.openai_compat
+    if (
+        cfg.llm.provider == "openai_compat"
+        and oc.local_multimodal
+        and not ext.text.strip()
+    ):
+        images = EXT.extract_images(
+            src_resolved, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
+        )
+
     err: str | None = None
     title = src_resolved.stem
     intro = ""
@@ -235,7 +246,8 @@ def ingest_ai(
     try:
         provider = get_provider(cfg)
         out = provider.extract_metadata(
-            text=ext.text, mime=ext.mime, filename=src_resolved.name, note=ext.note
+            text=ext.text, mime=ext.mime, filename=src_resolved.name, note=ext.note,
+            images=images or None,
         )
         title = out.get("title") or title
         intro = out.get("intro") or ""

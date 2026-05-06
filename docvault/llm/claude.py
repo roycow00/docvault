@@ -37,6 +37,7 @@ class ClaudeProvider:
         mime: str,
         filename: str,
         note: str | None = None,
+        images: list[tuple[str, bytes]] | None = None,  # ignored; Claude path is text-only for now
     ) -> MetadataDraft:
         # System prompt is split so the taxonomy hint can be cached separately
         # (it's repeated across every ingest call).

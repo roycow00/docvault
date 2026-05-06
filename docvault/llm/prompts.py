@@ -17,7 +17,14 @@ TAXONOMY_HINT = """The user's tag taxonomy includes (but is not limited to): Imm
 Use these when they clearly apply. Add specific tags (e.g. \"2025\", \"IRS\", a vendor name) only when they appear in the document content."""
 
 
-def user_message(filename: str, mime: str, body_text: str, note: str | None) -> str:
+def user_message(
+    filename: str,
+    mime: str,
+    body_text: str,
+    note: str | None,
+    *,
+    images_attached: bool = False,
+) -> str:
     parts = [f"Filename: {filename}", f"MIME: {mime}"]
     if note:
         parts.append(f"Note: {note}")
@@ -27,6 +34,11 @@ def user_message(filename: str, mime: str, body_text: str, note: str | None) -> 
         parts.append("---")
         parts.append(body_text)
         parts.append("---")
+        if images_attached:
+            parts.append("")
+            parts.append("Page images are also attached — use them to confirm or fill gaps.")
+    elif images_attached:
+        parts.append("Page images are attached — read them to extract the title, summary, and tags. Don't fall back to the filename if the images contain readable content.")
     else:
         parts.append("(No extractable text — base your suggestion on the filename only.)")
     return "\n".join(parts)

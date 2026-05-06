@@ -8,6 +8,7 @@ plenty for tag inference.
 
 from __future__ import annotations
 
+import io
 import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -118,4 +119,58 @@ def extract_text(path: Path, *, max_chars: int = 120_000) -> ExtractResult:
     )
 
 
-__all__ = ["ExtractResult", "extract_text"]
+def extract_images(
+    path: Path,
+    *,
+    max_pages: int = 3,
+    max_dim: int = 1280,
+) -> list[tuple[str, bytes]]:
+    """Render a document to PNG bytes for vision LLMs.
+
+    For PDFs: rasterize up to `max_pages` pages. Each page is scaled so its
+    longest edge is `max_dim` px (PDFium uses a scale factor relative to 72dpi).
+    For image files: read the original bytes (mime is whatever the file is).
+    Other types return an empty list.
+
+    Returns a list of (mime, bytes). Raises no errors for unsupported types —
+    callers should treat an empty list as "nothing to send."
+    """
+    mime = _guess_mime(path)
+
+    if mime == "application/pdf":
+        try:
+            import pypdfium2 as pdfium
+        except ImportError:
+            return []
+        try:
+            pdf = pdfium.PdfDocument(str(path))
+        except Exception:
+            return []
+        out: list[tuple[str, bytes]] = []
+        try:
+            n = min(max_pages, len(pdf))
+            for i in range(n):
+                page = pdf[i]
+                w_pt, h_pt = page.get_size()
+                # PDFium points are 1/72 inch; scale = max_dim / longest_edge_pt
+                longest = max(w_pt, h_pt) or 1.0
+                scale = max(0.5, min(4.0, max_dim / longest))
+                bitmap = page.render(scale=scale)
+                pil = bitmap.to_pil()
+                buf = io.BytesIO()
+                pil.save(buf, format="PNG", optimize=True)
+                out.append(("image/png", buf.getvalue()))
+        finally:
+            pdf.close()
+        return out
+
+    if mime.startswith("image/"):
+        try:
+            return [(mime, path.read_bytes())]
+        except OSError:
+            return []
+
+    return []
+
+
+__all__ = ["ExtractResult", "extract_text", "extract_images"]

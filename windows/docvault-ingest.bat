@@ -36,10 +36,14 @@ if errorlevel 1 (
 :ready
 echo [docvault] server ready.
 
-REM URL-encode the source path via PowerShell.
-for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString('%~1')"`) do (
+REM URL-encode the source path via PowerShell. Pass the path through an env
+REM var so apostrophes / quotes / unicode in the filename don't get mangled
+REM by cmd's argument tokenizer.
+set "DOCVAULT_SRC=%~1"
+for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString($env:DOCVAULT_SRC)"`) do (
     set "ENC=%%U"
 )
+set "DOCVAULT_SRC="
 
 echo [docvault] opening edit form for: %~1
 start "" "%BASE%/static/edit.html?src=!ENC!"

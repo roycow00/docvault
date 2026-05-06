@@ -36,20 +36,22 @@ if errorlevel 1 (
 :ready
 echo [docvault-ai] server ready. asking LLM to draft metadata ...
 
-REM Build JSON body and POST to /api/ingest/ai. Capture draft_id.
-for /f "usebackq delims=" %%J in (`powershell -NoProfile -Command "$body = @{ src_path = '%~1' } ^| ConvertTo-Json -Compress; Write-Output $body"`) do (
-    set "BODY=%%J"
-)
-
-for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Method Post -Uri '%BASE%/api/ingest/ai' -ContentType 'application/json' -Body '!BODY!'; Write-Output $r.draft_id } catch { Write-Output '' }"`) do (
+REM POST to /api/ingest/ai. Pass the source path through DOCVAULT_SRC so we
+REM don't have to round-trip JSON (with embedded double quotes) through cmd's
+REM argument tokenizer — that mangles the body and the server returns 422.
+set "DOCVAULT_SRC=%~1"
+for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "try { $body = ConvertTo-Json -Compress -InputObject @{ src_path = $env:DOCVAULT_SRC }; $r = Invoke-RestMethod -Method Post -Uri '%BASE%/api/ingest/ai' -ContentType 'application/json' -Body $body; Write-Output $r.draft_id } catch { Write-Output '' }"`) do (
     set "DRAFT=%%D"
 )
+set "DOCVAULT_SRC="
 
 if "%DRAFT%"=="" (
     echo [docvault-ai] AI ingest failed; falling back to manual form.
-    for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString('%~1')"`) do (
+    set "DOCVAULT_SRC=%~1"
+    for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString($env:DOCVAULT_SRC)"`) do (
         set "ENC=%%U"
     )
+    set "DOCVAULT_SRC="
     start "" "%BASE%/static/edit.html?src=!ENC!"
     exit /b 0
 )

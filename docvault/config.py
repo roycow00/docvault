@@ -32,6 +32,8 @@ class OpenAICompatCfg:
     model: str = "qwen3:14b"
     api_key: str = "ollama"
     local_multimodal: bool = False
+    max_image_pages: int = 3       # PDFs: rasterize up to this many pages
+    max_image_dim: int = 1280      # max width/height in px before downscaling
 
 
 @dataclass
@@ -122,6 +124,8 @@ def _from_file(path: Path) -> Config:
                 model=openai_raw.get("model", "qwen3:14b"),
                 api_key=openai_raw.get("api_key", "ollama"),
                 local_multimodal=openai_raw.get("local_multimodal", False),
+                max_image_pages=openai_raw.get("max_image_pages", 3),
+                max_image_dim=openai_raw.get("max_image_dim", 1280),
             ),
         ),
         ingest=IngestCfg(
