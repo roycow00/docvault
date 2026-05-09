@@ -212,7 +212,7 @@ def ingest_ai(
     from docvault import paths as P
     from docvault.config import load
     from docvault.hashing import FileInaccessibleError, sha256_file
-    from docvault.llm.base import LLMError, get_provider
+    from docvault.llm.base import LLMError, collect_existing_tags, get_provider
 
     cfg = load(config)
     src_resolved = src.expanduser().resolve()
@@ -248,6 +248,7 @@ def ingest_ai(
         out = provider.extract_metadata(
             text=ext.text, mime=ext.mime, filename=src_resolved.name, note=ext.note,
             images=images or None,
+            existing_tags=collect_existing_tags(cfg.vault_root),
         )
         title = out.get("title") or title
         intro = out.get("intro") or ""

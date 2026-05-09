@@ -55,6 +55,35 @@ body {
   font-size: 0.85em;
 }
 
+/* LLM status pill — pushed to the right edge of the topbar */
+.llm-status {
+  margin-left: auto;
+  padding: 0.15em 0.6em;
+  font-size: 0.8em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  border-radius: 999px;
+  background: #f1f1ee;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.llm-status::before {
+  content: "•";
+  display: inline-block;
+  margin-right: 0.35em;
+  color: var(--muted);
+  font-size: 1.4em;
+  line-height: 0;
+  vertical-align: middle;
+}
+.llm-status.ok      { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+.llm-status.ok::before    { color: #10b981; }
+.llm-status.bad     { background: #fef2f2; color: #7f1d1d; border-color: #fecaca; }
+.llm-status.bad::before   { color: #dc2626; }
+.llm-status.unknown::before { color: #94a3b8; }
+
 main { padding: 1em 1.2em; }
 
 table {
@@ -140,6 +169,20 @@ code, .path {
 .form { max-width: 720px; margin: 0 auto; padding: 1.5em 1.2em; }
 .form .row { margin-bottom: 1.1em; }
 .form label { display: block; font-weight: 600; margin-bottom: 0.3em; }
+.form .suggest-btn {
+  float: right;
+  font-weight: normal;
+  font-size: 0.8em;
+  padding: 0.15em 0.6em;
+  background: white;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.form .suggest-btn:hover:not(:disabled) { background: var(--row-hover); }
+.form .suggest-btn:disabled { opacity: 0.6; cursor: progress; }
+.form .suggest-btn::before { content: "\2728  "; }
 .form input[type="text"], .form textarea {
   width: 100%;
   font-size: 1em;

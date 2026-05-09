@@ -4,6 +4,7 @@
   const sha = params.get("sha");
   const src = params.get("src");
   const draftId = params.get("draft");
+  const lockMode = params.get("lockmode");  // "reference" | "move" | null
 
   const $ = id => document.getElementById(id);
   const elTitle = $("title");
@@ -20,6 +21,7 @@
   const elSave = $("save");
   const elCancel = $("cancel");
   const elSuggested = $("suggested-tags");
+  const elSuggestAi = $("suggest-ai");
 
   let mode = "create";   // "create" | "edit-existing"
   let existingDoc = null;
@@ -120,6 +122,19 @@
     } else {
       setBanner("No source path or sha provided.", "error");
     }
+
+    // If the launcher locked the storage mode (e.g. "Ingest in-place" verb),
+    // apply that override last so it wins over the auto-detected default,
+    // then disable the radios so the user can't accidentally change it.
+    if (lockMode === "reference" || lockMode === "move") {
+      if (lockMode === "reference") elModeRef.checked = true;
+      else elModeMove.checked = true;
+      [elModeMove, elModeRef].forEach(i => i.disabled = true);
+      elStorageHint.textContent =
+        lockMode === "reference"
+          ? "🔒 Locked to in-place by the launcher — file will stay where it is."
+          : "🔒 Locked to move-into-vault by the launcher.";
+    }
   }
 
   async function save() {
@@ -172,6 +187,65 @@
     }
     location.href = `/static/index.html?highlight=${encodeURIComponent(out.sha256)}`;
   }
+
+  function currentSrcPath() {
+    // Returns the absolute path of the source file the form is editing,
+    // or null if there isn't one (shouldn't happen — the button hides itself
+    // in that case via init()).
+    if (mode === "edit-existing" && existingDoc) return existingDoc.location.resolved;
+    if (mode === "create-from-draft" && elSrc.textContent) return elSrc.textContent;
+    if (mode === "create" && src) return src;
+    return null;
+  }
+
+  elSuggestAi.addEventListener("click", async () => {
+    const path = currentSrcPath();
+    if (!path) {
+      setBanner("Can't suggest: no source file path available.", "error");
+      return;
+    }
+    elSuggestAi.disabled = true;
+    const originalLabel = elSuggestAi.textContent;
+    elSuggestAi.textContent = "thinking...";
+    try {
+      const r = await fetch("/api/extract/metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ src_path: path }),
+      });
+      if (!r.ok) {
+        setBanner("Suggestion failed: " + await r.text(), "error");
+        return;
+      }
+      const out = await r.json();
+      if (out.error) {
+        setBanner("LLM error: " + out.error, "error");
+        // Still apply whatever we got (likely just the filename stem).
+      }
+      if (out.title) elTitle.value = out.title;
+      if (out.intro) elIntro.value = out.intro;
+      if (out.tags && out.tags.length) {
+        // Merge with any tags the user has already entered, avoiding dupes.
+        const existing = parseTags(elTags.value);
+        const seen = new Set(existing.map(t => t.toLowerCase()));
+        for (const t of out.tags) {
+          if (!seen.has(t.toLowerCase())) {
+            existing.push(t);
+            seen.add(t.toLowerCase());
+          }
+        }
+        elTags.value = existing.join(", ");
+      }
+      if (!out.error) {
+        setBanner("AI suggestions applied. Review and edit before saving.", "info");
+      }
+    } catch (e) {
+      setBanner("Suggestion request failed: " + e.message, "error");
+    } finally {
+      elSuggestAi.disabled = false;
+      elSuggestAi.textContent = originalLabel;
+    }
+  });
 
   elSave.addEventListener("click", save);
   elCancel.addEventListener("click", () => { history.length > 1 ? history.back() : (location.href = "/static/index.html"); });

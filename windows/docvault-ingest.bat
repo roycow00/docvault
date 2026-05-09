@@ -11,7 +11,7 @@ if "%~1"=="" (
 )
 
 set "DOCVAULT_HOME=%~dp0.."
-set "PORT=7777"
+if defined DOCVAULT_PORT (set "PORT=%DOCVAULT_PORT%") else (set "PORT=7777")
 set "BASE=http://127.0.0.1:%PORT%"
 
 echo [docvault] checking server at %BASE% ...

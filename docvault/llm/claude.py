@@ -38,6 +38,7 @@ class ClaudeProvider:
         filename: str,
         note: str | None = None,
         images: list[tuple[str, bytes]] | None = None,  # ignored; Claude path is text-only for now
+        existing_tags: list[str] | None = None,
     ) -> MetadataDraft:
         # System prompt is split so the taxonomy hint can be cached separately
         # (it's repeated across every ingest call).
@@ -64,7 +65,10 @@ class ClaudeProvider:
                 messages=[
                     {
                         "role": "user",
-                        "content": user_message(filename, mime, text, note),
+                        "content": user_message(
+                            filename, mime, text, note,
+                            existing_tags=existing_tags,
+                        ),
                     }
                 ],
             )

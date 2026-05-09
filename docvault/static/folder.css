@@ -1,0 +1,86 @@
+/* docvault — folder picker */
+
+.folder { padding: 1em 1.2em; max-width: 1100px; margin: 0 auto; }
+
+.folder-meta { margin-bottom: 1em; line-height: 1.6; }
+.folder-meta code { word-break: break-all; }
+
+.folder-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  flex-wrap: wrap;
+  padding: 0.6em 0.8em;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 1em;
+  position: sticky;
+  top: 49px;            /* under the topbar */
+  z-index: 4;
+}
+.folder-toolbar button {
+  padding: 0.3em 0.7em;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+.folder-toolbar button.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  margin-left: auto;
+  padding: 0.4em 1em;
+}
+.folder-toolbar .spacer { flex: 1; }
+.folder-toolbar .inline-fs {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1em 0.6em;
+  margin: 0;
+  font-size: 0.85em;
+}
+.folder-toolbar .inline-fs legend { padding: 0 0.3em; font-size: 0.75em; color: var(--muted); }
+.folder-toolbar .inline-fs label { margin-right: 0.6em; }
+
+.tree {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.6em 0.8em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.tree ul { list-style: none; margin: 0; padding-left: 1.2em; }
+.tree > ul { padding-left: 0.2em; }
+
+.tree .node { display: flex; align-items: center; gap: 0.35em; padding: 0.1em 0; }
+.tree .node:hover { background: var(--row-hover); }
+.tree .toggle {
+  display: inline-block;
+  width: 1em;
+  cursor: pointer;
+  user-select: none;
+  color: var(--muted);
+  text-align: center;
+}
+.tree .toggle.empty { visibility: hidden; }
+.tree .name { flex: 1; min-width: 0; word-break: break-all; }
+.tree .name.dir { font-weight: 600; }
+.tree .size { color: var(--muted); font-size: 0.85em; padding-left: 0.5em; }
+
+.tree li.collapsed > ul { display: none; }
+.tree input[type="checkbox"] { cursor: pointer; }
+.tree input[type="checkbox"]:indeterminate { opacity: 0.7; }
+
+.results { margin-top: 1.5em; }
+.results h2 { font-size: 1em; margin: 0 0 0.4em; }
+.results table { font-size: 0.9em; }
+.results td.status-ok        { color: #065f46; font-weight: 600; }
+.results td.status-duplicate { color: var(--warn); font-weight: 600; }
+.results td.status-error     { color: var(--danger); font-weight: 600; }

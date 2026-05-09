@@ -230,6 +230,99 @@ def test_finalize_completes_ingest(
     assert not src_file.exists()
 
 
+def test_extract_metadata_endpoint_falls_back_on_no_llm(
+    client: TestClient, src_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without an LLM key the endpoint should still return a usable shape:
+    title=filename stem, empty intro/tags, error captured."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    r = client.post("/api/extract/metadata", json={"src_path": str(src_file)})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["title"] == src_file.stem
+    assert body["intro"] == ""
+    assert body["tags"] == []
+    assert body["error"]  # LLM call failed -> error captured
+
+
+def test_extract_metadata_endpoint_rejects_nonfile(client: TestClient, tmp_path: Path) -> None:
+    r = client.post("/api/extract/metadata", json={"src_path": str(tmp_path / "nope.txt")})
+    assert r.status_code == 400
+
+
+def test_llm_status_claude_no_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default LLMCfg is provider=claude; with no key, status reports disconnected."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    r = client.get("/api/llm/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["provider"] == "claude"
+    assert body["connected"] is False
+    assert "no API key" in body["detail"]
+
+
+def test_llm_status_claude_with_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    r = client.get("/api/llm/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["connected"] is True
+    assert "API key configured" in body["detail"]
+
+
+def test_folder_scan_lists_files(client: TestClient, tmp_path: Path) -> None:
+    folder = tmp_path / "scanme"
+    (folder / "sub").mkdir(parents=True)
+    (folder / "a.txt").write_text("alpha")
+    (folder / "sub" / "b.pdf").write_bytes(b"%PDF-1.4")
+    (folder / ".hidden").write_text("skip me")
+
+    r = client.post("/api/folder/scan", json={"root": str(folder)})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    rels = sorted(f["rel"] for f in body["files"])
+    assert rels == ["a.txt", "sub/b.pdf"]
+    assert body["truncated"] is False
+
+
+def test_folder_scan_rejects_nondir(client: TestClient, tmp_path: Path) -> None:
+    f = tmp_path / "single.txt"
+    f.write_text("x")
+    r = client.post("/api/folder/scan", json={"root": str(f)})
+    assert r.status_code == 400
+
+
+def test_folder_ingest_stream_no_ai(
+    client: TestClient, tmp_path: Path
+) -> None:
+    folder = tmp_path / "batch"
+    folder.mkdir()
+    (folder / "one.txt").write_text("one")
+    (folder / "two.txt").write_text("two")
+
+    with client.stream(
+        "POST", "/api/folder/ingest",
+        json={"root": str(folder), "rel_paths": ["one.txt", "two.txt"],
+              "mode": "reference", "use_ai": False},
+    ) as r:
+        assert r.status_code == 200
+        lines = [ln for ln in r.iter_lines() if ln.strip()]
+
+    import json as _json
+    events = [_json.loads(ln) for ln in lines]
+    # last event must be the summary
+    assert events[-1]["done"] is True
+    assert events[-1]["ok"] == 2
+    assert events[-1]["error"] == 0
+    # the per-file events
+    assert {e["rel"] for e in events[:-1]} == {"one.txt", "two.txt"}
+    assert all(e["status"] == "ok" for e in events[:-1])
+
+
 def test_open_404_when_external_missing(
     client: TestClient, tmp_path: Path
 ) -> None:

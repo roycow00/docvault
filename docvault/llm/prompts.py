@@ -24,10 +24,20 @@ def user_message(
     note: str | None,
     *,
     images_attached: bool = False,
+    existing_tags: list[str] | None = None,
 ) -> str:
     parts = [f"Filename: {filename}", f"MIME: {mime}"]
     if note:
         parts.append(f"Note: {note}")
+    if existing_tags:
+        # Listed before the body so the model sees the vocabulary while it's
+        # still attending to instructions. Ordered by user's frequency of use.
+        parts.append("")
+        parts.append(
+            "User's existing tags (use these verbatim when applicable, in preference "
+            "to inventing new ones; ordered by frequency): "
+            + ", ".join(existing_tags)
+        )
     parts.append("")
     if body_text.strip():
         parts.append("Document text follows (may be truncated):")

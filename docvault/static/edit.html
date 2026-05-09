@@ -9,6 +9,7 @@
   <header class="topbar">
     <a class="back" href="/static/index.html">&larr; back</a>
     <h1 id="page-title">Ingest document</h1>
+    <span class="llm-status" id="llm-status" title="LLM provider status">checking LLM…</span>
   </header>
 
   <main class="form">
@@ -27,7 +28,10 @@
     </fieldset>
 
     <div class="row">
-      <label for="title">Title</label>
+      <label for="title">
+        Title
+        <button type="button" id="suggest-ai" class="suggest-btn" title="Ask the LLM to draft a title, intro, and tags from the file contents">Suggest with AI</button>
+      </label>
       <input id="title" type="text" />
     </div>
 
@@ -50,5 +54,6 @@
   </main>
 
   <script src="/static/edit.js"></script>
+  <script src="/static/llm-status.js"></script>
 </body>
 </html>

@@ -44,9 +44,14 @@ class OpenAICompatProvider:
         filename: str,
         note: str | None = None,
         images: list[tuple[str, bytes]] | None = None,
+        existing_tags: list[str] | None = None,
     ) -> MetadataDraft:
         has_images = bool(self._multimodal and images)
-        user_text = user_message(filename, mime, text, note, images_attached=has_images)
+        user_text = user_message(
+            filename, mime, text, note,
+            images_attached=has_images,
+            existing_tags=existing_tags,
+        )
         if has_images:
             content: list[dict] = [{"type": "text", "text": user_text}]
             for img_mime, img_bytes in images:

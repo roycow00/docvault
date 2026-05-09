@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>docvault — ingest folder</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/folder.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/static/index.html">&larr; back</a>
+    <h1 id="page-title">Ingest folder</h1>
+    <span class="llm-status" id="llm-status" title="LLM provider status">checking LLM…</span>
+  </header>
+
+  <main class="folder">
+    <div id="banner" class="banner hidden"></div>
+
+    <div class="folder-meta">
+      <div><strong>Folder:</strong> <code id="folder-root" class="path"></code></div>
+      <div class="muted" id="folder-summary"></div>
+    </div>
+
+    <div class="folder-toolbar">
+      <button id="select-all">Select all</button>
+      <button id="select-none">Select none</button>
+      <button id="expand-all">Expand all</button>
+      <button id="collapse-all">Collapse all</button>
+      <span class="spacer"></span>
+      <label><input type="checkbox" id="use-ai" checked /> use AI to draft metadata</label>
+      <fieldset class="inline-fs">
+        <legend>Storage</legend>
+        <label><input type="radio" name="mode" value="reference" checked /> Reference in place</label>
+        <label><input type="radio" name="mode" value="move" /> Move into vault</label>
+      </fieldset>
+      <button id="ingest" class="primary">Ingest selected</button>
+    </div>
+
+    <div id="tree" class="tree"></div>
+
+    <section id="results" class="results hidden">
+      <h2>Results</h2>
+      <div id="progress" class="muted"></div>
+      <table>
+        <thead><tr><th>File</th><th>Status</th><th>Detail</th></tr></thead>
+        <tbody id="results-rows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/folder.js"></script>
+  <script src="/static/llm-status.js"></script>
+</body>
+</html>
