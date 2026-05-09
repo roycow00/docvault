@@ -23,6 +23,10 @@ class Draft:
     note: str | None = None      # e.g. "pdf has no extractable text"
     error: str | None = None     # if LLM call failed
     created_at: float = field(default_factory=time.time)
+    # Set when this draft was created because the source file's sha256 already
+    # exists in the vault. The front end uses this to short-circuit the AI
+    # draft form and jump straight to the existing record.
+    duplicate_of_sha256: str | None = None
 
 
 def _drafts_dir(vault_root: Path) -> Path:

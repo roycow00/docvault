@@ -102,6 +102,16 @@
         return;
       }
       const draft = await r.json();
+
+      // Duplicate sha256 — show the popup the user asked for and jump to the
+      // existing record. We do this before rendering anything so the user
+      // never sees an AI-draft form for a file that's already in the vault.
+      if (draft.duplicate_of_sha256) {
+        alert("Duplicate entry — this file is already in your vault.\n\nOpening the existing record.");
+        location.replace(`/static/edit.html?sha=${encodeURIComponent(draft.duplicate_of_sha256)}`);
+        return;
+      }
+
       elPageTitle.textContent = "Review AI-suggested metadata";
       elSrc.textContent = draft.src_path;
       elTitle.value = draft.title;
@@ -181,8 +191,8 @@
     }
     const out = await r.json();
     if (out.duplicate) {
-      // Hop to the existing record — let the user merge.
-      location.href = `/static/edit.html?sha=${encodeURIComponent(out.sha256)}&dup=1`;
+      alert("Duplicate entry — this file is already in your vault.\n\nOpening the existing record.");
+      location.href = `/static/edit.html?sha=${encodeURIComponent(out.sha256)}`;
       return;
     }
     location.href = `/static/index.html?highlight=${encodeURIComponent(out.sha256)}`;

@@ -34,6 +34,25 @@ class OpenAICompatCfg:
     local_multimodal: bool = False
     max_image_pages: int = 3       # PDFs: rasterize up to this many pages
     max_image_dim: int = 1280      # max width/height in px before downscaling
+    # When local_multimodal is on, vision kicks in if the extracted text is
+    # *shorter* than this many non-whitespace chars. Set to 0 for the strict
+    # "only when text is empty" behaviour. 300 catches mostly-graphical PDFs
+    # whose only extractable text is a single page-number / running header.
+    vision_text_threshold: int = 300
+
+
+@dataclass
+class PromptCfg:
+    # Optional overrides for the strings sent to the LLM. None means "use the
+    # built-in default from docvault.llm.prompts". Setting any of these in
+    # config.toml lets the user reshape the summarization / tagging prompt
+    # without editing source.
+    system: str | None = None
+    taxonomy_hint: str | None = None
+    # Inserted at the very top of the user message (before filename/MIME).
+    # Useful for steering style ("write the intro in French", etc.) without
+    # replacing the whole prompt.
+    user_prefix: str | None = None
 
 
 @dataclass
@@ -42,6 +61,7 @@ class LLMCfg:
     max_input_chars: int = 120_000
     claude: ClaudeCfg = field(default_factory=ClaudeCfg)
     openai_compat: OpenAICompatCfg = field(default_factory=OpenAICompatCfg)
+    prompt: PromptCfg = field(default_factory=PromptCfg)
 
 
 @dataclass
@@ -103,6 +123,7 @@ def _from_file(path: Path) -> Config:
     llm_raw = raw.get("llm", {})
     claude_raw = llm_raw.get("claude", {})
     openai_raw = llm_raw.get("openai_compat", {})
+    prompt_raw = llm_raw.get("prompt", {})
     ingest_raw = raw.get("ingest", {})
     cleanup_raw = raw.get("cleanup", {})
     trash_raw = raw.get("trash", {})
@@ -126,6 +147,12 @@ def _from_file(path: Path) -> Config:
                 local_multimodal=openai_raw.get("local_multimodal", False),
                 max_image_pages=openai_raw.get("max_image_pages", 3),
                 max_image_dim=openai_raw.get("max_image_dim", 1280),
+                vision_text_threshold=openai_raw.get("vision_text_threshold", 300),
+            ),
+            prompt=PromptCfg(
+                system=prompt_raw.get("system"),
+                taxonomy_hint=prompt_raw.get("taxonomy_hint"),
+                user_prefix=prompt_raw.get("user_prefix"),
             ),
         ),
         ingest=IngestCfg(

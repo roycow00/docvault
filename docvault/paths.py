@@ -60,7 +60,13 @@ def _yyyymmdd(dt: datetime) -> str:
 
 
 def vault_files_dir(vault_root: Path, dt: datetime) -> Path:
-    return vault_root / "files" / _yyyymm(dt)
+    # Files moved into the vault land in a per-day archive folder named
+    # `#Archived-YYYY-MM-DD` directly under the vault root. The leading `#`
+    # sorts these grouping folders together and keeps them visually distinct
+    # from `meta/`, `trash/`, etc. Records ingested under the older
+    # `files/YYYY-MM/` layout keep their existing relative paths in metadata
+    # — `vault_path_for` is only consulted for new copies.
+    return vault_root / f"#Archived-{_yyyymmdd(dt)}"
 
 
 def vault_meta_dir(vault_root: Path, dt: datetime) -> Path:

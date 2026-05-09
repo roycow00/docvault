@@ -6,8 +6,8 @@ from docvault.config import Config, resolve_claude_api_key
 from docvault.llm.base import LLMError, MetadataDraft
 from docvault.llm.prompts import (
     METADATA_TOOL_SCHEMA,
-    SYSTEM_PROMPT,
-    TAXONOMY_HINT,
+    resolved_system_prompt,
+    resolved_taxonomy_hint,
     user_message,
 )
 
@@ -29,6 +29,7 @@ class ClaudeProvider:
         self._client = Anthropic(api_key=api_key)
         self._model = cfg.llm.claude.model
         self._cache = cfg.llm.claude.use_prompt_cache
+        self._prompt_cfg = cfg.llm.prompt
 
     def extract_metadata(
         self,
@@ -41,15 +42,17 @@ class ClaudeProvider:
         existing_tags: list[str] | None = None,
     ) -> MetadataDraft:
         # System prompt is split so the taxonomy hint can be cached separately
-        # (it's repeated across every ingest call).
-        system_blocks = [
-            {"type": "text", "text": SYSTEM_PROMPT},
-            {
+        # (it's repeated across every ingest call). Both halves can be
+        # overridden via [llm.prompt] in config.toml.
+        system_text = resolved_system_prompt(self._prompt_cfg)
+        taxonomy_text = resolved_taxonomy_hint(self._prompt_cfg)
+        system_blocks = [{"type": "text", "text": system_text}]
+        if taxonomy_text:
+            system_blocks.append({
                 "type": "text",
-                "text": TAXONOMY_HINT,
+                "text": taxonomy_text,
                 **({"cache_control": {"type": "ephemeral"}} if self._cache else {}),
-            },
-        ]
+            })
         tool = {
             "name": "emit_metadata",
             "description": "Emit the proposed metadata for the document.",
@@ -68,6 +71,7 @@ class ClaudeProvider:
                         "content": user_message(
                             filename, mime, text, note,
                             existing_tags=existing_tags,
+                            user_prefix=self._prompt_cfg.user_prefix if self._prompt_cfg else None,
                         ),
                     }
                 ],

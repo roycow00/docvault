@@ -8,7 +8,124 @@
   --danger: #b91c1c;
   --row-hover: #f0f4f9;
   --code-bg: #f1f1ee;
+  --surface: #ffffff;       /* topbar / table / dialog background */
+  --surface-alt: #f5f5f1;   /* table header */
+  --tag-bg: #e8edf5;
+  --tag-fg: #234;
+  --chip-bg: #f1f1ee;
+  --chip-bg-hover: #e8edf5;
+  --highlight: #fef9c3;
+  --backdrop: rgba(0,0,0,0.35);
+  --banner-warn-bg: #fef3c7;
+  --banner-warn-fg: #78350f;
+  --banner-warn-border: #fde68a;
+  --banner-error-bg: #fee2e2;
+  --banner-error-fg: #7f1d1d;
+  --banner-error-border: #fecaca;
+  --banner-info-bg: #dbeafe;
+  --banner-info-fg: #1e3a8a;
+  --banner-info-border: #bfdbfe;
+  --status-ok-bg: #ecfdf5;
+  --status-ok-fg: #065f46;
+  --status-ok-border: #a7f3d0;
+  --status-bad-bg: #fef2f2;
+  --status-bad-fg: #7f1d1d;
+  --status-bad-border: #fecaca;
+  --status-ok-dot: #10b981;
+  --status-bad-dot: #dc2626;
+  --status-unknown-dot: #94a3b8;
+  --status-ok-text: #065f46;
+  --status-warn-text: var(--warn);
+  --status-error-text: var(--danger);
+  color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+/* Auto dark mode when the OS prefers dark and the user hasn't chosen a
+   preference manually. The body[data-theme] overrides below win in either
+   direction. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181d;
+    --fg: #e7e9ee;
+    --muted: #9aa3af;
+    --line: #2a2e36;
+    --accent: #60a5fa;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --row-hover: #1f242c;
+    --code-bg: #1d2027;
+    --surface: #1b1e24;
+    --surface-alt: #23272f;
+    --tag-bg: #283041;
+    --tag-fg: #cbd5e1;
+    --chip-bg: #23272f;
+    --chip-bg-hover: #2a3142;
+    --highlight: #2d2614;
+    --backdrop: rgba(0,0,0,0.6);
+    --banner-warn-bg: #3a2f12;
+    --banner-warn-fg: #fde68a;
+    --banner-warn-border: #5a4818;
+    --banner-error-bg: #3a1717;
+    --banner-error-fg: #fecaca;
+    --banner-error-border: #5a2222;
+    --banner-info-bg: #16243f;
+    --banner-info-fg: #bfdbfe;
+    --banner-info-border: #1e3a6a;
+    --status-ok-bg: #0f2c22;
+    --status-ok-fg: #a7f3d0;
+    --status-ok-border: #14532d;
+    --status-bad-bg: #2a1212;
+    --status-bad-fg: #fecaca;
+    --status-bad-border: #5a2222;
+    --status-ok-text: #6ee7b7;
+    --status-warn-text: #fbbf24;
+    --status-error-text: #f87171;
+  }
+}
+
+/* Manual override: data-theme="dark" on <html> forces dark regardless of OS. */
+:root[data-theme="dark"] {
+  --bg: #16181d;
+  --fg: #e7e9ee;
+  --muted: #9aa3af;
+  --line: #2a2e36;
+  --accent: #60a5fa;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --row-hover: #1f242c;
+  --code-bg: #1d2027;
+  --surface: #1b1e24;
+  --surface-alt: #23272f;
+  --tag-bg: #283041;
+  --tag-fg: #cbd5e1;
+  --chip-bg: #23272f;
+  --chip-bg-hover: #2a3142;
+  --highlight: #2d2614;
+  --backdrop: rgba(0,0,0,0.6);
+  --banner-warn-bg: #3a2f12;
+  --banner-warn-fg: #fde68a;
+  --banner-warn-border: #5a4818;
+  --banner-error-bg: #3a1717;
+  --banner-error-fg: #fecaca;
+  --banner-error-border: #5a2222;
+  --banner-info-bg: #16243f;
+  --banner-info-fg: #bfdbfe;
+  --banner-info-border: #1e3a6a;
+  --status-ok-bg: #0f2c22;
+  --status-ok-fg: #a7f3d0;
+  --status-ok-border: #14532d;
+  --status-bad-bg: #2a1212;
+  --status-bad-fg: #fecaca;
+  --status-bad-border: #5a2222;
+  --status-ok-text: #6ee7b7;
+  --status-warn-text: #fbbf24;
+  --status-error-text: #f87171;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -27,7 +144,7 @@ body {
   gap: 1em;
   padding: 0.6em 1.2em;
   border-bottom: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -49,6 +166,8 @@ body {
   font-size: 1em;
   border: 1px solid var(--line);
   border-radius: 4px;
+  background: var(--surface);
+  color: var(--fg);
 }
 .topbar .count {
   color: var(--muted);
@@ -62,7 +181,7 @@ body {
   font-size: 0.8em;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   border-radius: 999px;
-  background: #f1f1ee;
+  background: var(--chip-bg);
   color: var(--muted);
   border: 1px solid var(--line);
   white-space: nowrap;
@@ -78,18 +197,36 @@ body {
   line-height: 0;
   vertical-align: middle;
 }
-.llm-status.ok      { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
-.llm-status.ok::before    { color: #10b981; }
-.llm-status.bad     { background: #fef2f2; color: #7f1d1d; border-color: #fecaca; }
-.llm-status.bad::before   { color: #dc2626; }
-.llm-status.unknown::before { color: #94a3b8; }
+.llm-status.ok      { background: var(--status-ok-bg); color: var(--status-ok-fg); border-color: var(--status-ok-border); }
+.llm-status.ok::before    { color: var(--status-ok-dot); }
+.llm-status.bad     { background: var(--status-bad-bg); color: var(--status-bad-fg); border-color: var(--status-bad-border); }
+.llm-status.bad::before   { color: var(--status-bad-dot); }
+.llm-status.unknown::before { color: var(--status-unknown-dot); }
+
+/* Theme toggle button — sits just left of the LLM status pill. */
+.theme-toggle {
+  margin-left: auto;
+  padding: 0.2em 0.55em;
+  font-size: 0.95em;
+  line-height: 1;
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.theme-toggle:hover { background: var(--row-hover); }
+/* When the toggle and pill both sit in the topbar, only the toggle should
+   take the auto margin so they sit together at the right edge. */
+.theme-toggle + .llm-status { margin-left: 0.5em; }
 
 main { padding: 1em 1.2em; }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
@@ -98,7 +235,7 @@ thead th {
   text-align: left;
   padding: 0.6em 0.8em;
   border-bottom: 1px solid var(--line);
-  background: #f5f5f1;
+  background: var(--surface-alt);
   font-weight: 600;
   font-size: 0.85em;
   color: var(--muted);
@@ -110,6 +247,8 @@ tbody td {
 }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--row-hover); }
+/* "Just saved" row glow — applied after edit/save redirects with ?highlight=. */
+tbody tr.just-saved td { background: var(--highlight); }
 
 .col-tags { width: 22%; }
 .col-date { width: 14%; white-space: nowrap; }
@@ -135,8 +274,8 @@ tbody tr:hover { background: var(--row-hover); }
   padding: 0.05em 0.45em;
   margin: 0 0.2em 0.15em 0;
   font-size: 0.8em;
-  background: #e8edf5;
-  color: #234;
+  background: var(--tag-bg);
+  color: var(--tag-fg);
   border-radius: 3px;
 }
 
@@ -144,7 +283,7 @@ tbody tr:hover { background: var(--row-hover); }
   margin-right: 0.3em;
   font-size: 0.85em;
   padding: 0.15em 0.5em;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 3px;
   cursor: pointer;
@@ -174,7 +313,7 @@ code, .path {
   font-weight: normal;
   font-size: 0.8em;
   padding: 0.15em 0.6em;
-  background: white;
+  background: var(--surface);
   color: var(--accent);
   border: 1px solid var(--line);
   border-radius: 3px;
@@ -190,6 +329,8 @@ code, .path {
   border: 1px solid var(--line);
   border-radius: 4px;
   font-family: inherit;
+  background: var(--surface);
+  color: var(--fg);
 }
 .form textarea { font-family: ui-monospace, SFMono-Regular, monospace; }
 .form fieldset {
@@ -209,19 +350,21 @@ code, .path {
   display: inline-block;
   padding: 0.05em 0.45em;
   margin: 0 0.2em;
-  background: #f1f1ee;
+  background: var(--chip-bg);
+  color: var(--fg);
   border-radius: 3px;
   cursor: pointer;
   font-size: 0.85em;
 }
-.suggested-chip:hover { background: #e8edf5; }
+.suggested-chip:hover { background: var(--chip-bg-hover); }
 .buttons { display: flex; gap: 0.5em; }
 .buttons button {
   padding: 0.5em 1.2em;
   font-size: 1em;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: white;
+  background: var(--surface);
+  color: var(--fg);
   cursor: pointer;
 }
 .buttons button.primary {
@@ -236,12 +379,12 @@ code, .path {
   padding: 0.6em 0.9em;
   margin-bottom: 1em;
   border-radius: 4px;
-  background: #fef3c7;
-  color: #78350f;
-  border: 1px solid #fde68a;
+  background: var(--banner-warn-bg);
+  color: var(--banner-warn-fg);
+  border: 1px solid var(--banner-warn-border);
 }
-.banner.error { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
-.banner.info { background: #dbeafe; color: #1e3a8a; border-color: #bfdbfe; }
+.banner.error { background: var(--banner-error-bg); color: var(--banner-error-fg); border-color: var(--banner-error-border); }
+.banner.info  { background: var(--banner-info-bg);  color: var(--banner-info-fg);  border-color: var(--banner-info-border); }
 
 .muted { color: var(--muted); font-size: 0.9em; }
 
@@ -251,8 +394,10 @@ dialog {
   border-radius: 6px;
   padding: 0;
   max-width: 520px;
+  background: var(--surface);
+  color: var(--fg);
 }
-dialog::backdrop { background: rgba(0,0,0,0.35); }
+dialog::backdrop { background: var(--backdrop); }
 dialog form { padding: 1em 1.2em; }
 dialog h2 { margin: 0 0 0.5em; font-size: 1.05em; }
 dialog .actions {
@@ -264,7 +409,8 @@ dialog .actions {
 dialog .actions button {
   text-align: left;
   padding: 0.6em 0.8em;
-  background: white;
+  background: var(--surface);
+  color: var(--fg);
   border: 1px solid var(--line);
   border-radius: 4px;
   cursor: pointer;
@@ -274,3 +420,6 @@ dialog .actions button {
 dialog .actions button small { color: var(--muted); font-size: 0.85em; font-weight: normal; }
 dialog .actions button:hover { background: var(--row-hover); }
 dialog .actions button.cancel { color: var(--muted); margin-top: 0.4em; }
+dialog .actions button.danger { color: var(--danger); border-color: var(--danger); }
+dialog .actions button.danger small { color: var(--danger); opacity: 0.8; }
+dialog .actions button.danger:hover { background: var(--banner-error-bg); }

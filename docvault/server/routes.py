@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 import uuid
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Iterator, Literal
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
@@ -77,7 +78,12 @@ class UpdateIn(BaseModel):
 
 
 class DeleteIn(BaseModel):
-    action: Literal["entry_only", "entry_and_file", "entry_and_reveal"]
+    action: Literal[
+        "entry_only",
+        "entry_and_file",
+        "entry_and_file_hard",
+        "entry_and_reveal",
+    ]
 
 
 class ShellIn(BaseModel):
@@ -98,6 +104,7 @@ class DraftOut(BaseModel):
     tags: list[str]
     note: str | None = None
     error: str | None = None
+    duplicate_of_sha256: str | None = None
 
 
 class FinalizeIn(BaseModel):
@@ -194,6 +201,7 @@ def _draft_to_out(d: "DRAFTS.Draft") -> "DraftOut":
         tags=list(d.tags),
         note=d.note,
         error=d.error,
+        duplicate_of_sha256=d.duplicate_of_sha256,
     )
 
 
@@ -280,6 +288,19 @@ def build_router(cfg: Config) -> APIRouter:
                 return OkOut(ok=True, note="entry and file moved to trash")
             return OkOut(ok=True, note="entry deleted; file was already missing")
 
+        if body.action == "entry_and_file_hard":
+            # Permanent deletion — no trash buffer. The .md is already in
+            # trash from the unconditional move above, but the data file is
+            # unlinked outright. Front-end is responsible for the extra
+            # confirmation; the server just honours the request.
+            if file_path.is_file():
+                try:
+                    file_path.unlink()
+                except OSError as e:
+                    raise HTTPException(status_code=500, detail=f"could not delete file: {e}")
+                return OkOut(ok=True, note="entry trashed; file permanently deleted")
+            return OkOut(ok=True, note="entry trashed; file was already missing")
+
         if body.action == "entry_and_reveal":
             if file_path.is_file():
                 shell.reveal(file_path)
@@ -340,8 +361,9 @@ def build_router(cfg: Config) -> APIRouter:
             except Exception:
                 continue
             if m.sha256 == sha:
-                # Return a draft pre-populated from the existing record so the
-                # edit page lands on a "merge" view.
+                # Return a draft flagged as a duplicate. The front end uses
+                # `duplicate_of_sha256` to redirect straight to the existing
+                # record's edit page (no AI call, no draft form).
                 draft = DRAFTS.Draft(
                     draft_id=DRAFTS.new_id(),
                     src_path=str(src),
@@ -351,6 +373,7 @@ def build_router(cfg: Config) -> APIRouter:
                     intro=m.intro,
                     tags=list(m.tags),
                     note=f"duplicate of existing record sha256={sha}",
+                    duplicate_of_sha256=sha,
                 )
                 DRAFTS.save(vault_root, draft)
                 return _draft_to_out(draft)
@@ -369,7 +392,7 @@ def build_router(cfg: Config) -> APIRouter:
         if (
             cfg.llm.provider == "openai_compat"
             and oc.local_multimodal
-            and not ext.text.strip()
+            and len(ext.text.strip()) < oc.vision_text_threshold
         ):
             images = EXT.extract_images(
                 src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
@@ -408,6 +431,171 @@ def build_router(cfg: Config) -> APIRouter:
         )
         DRAFTS.save(vault_root, draft)
         return _draft_to_out(draft)
+
+    @router.post("/ingest/ai/stream")
+    def ingest_ai_stream(body: IngestAIIn):
+        """NDJSON-streamed version of /ingest/ai.
+
+        Emits one JSON object per phase so a progress page can show live
+        status, elapsed time, the extracted-text preview, and the LLM's
+        final response. Each event has at least `event` and `t` (seconds
+        since the request started). Final event is `event=done` (with a
+        `draft_id`) or `event=duplicate` (with the existing record's sha)
+        or `event=fatal` (with a detail message).
+        """
+        src = Path(body.src_path).expanduser()
+
+        def emit(start: float, event: str, **fields) -> str:
+            return json.dumps({
+                "event": event,
+                "t": round(time.time() - start, 2),
+                **fields,
+            }, ensure_ascii=False) + "\n"
+
+        def gen() -> Iterator[str]:
+            t0 = time.time()
+            yield emit(t0, "start", filename=src.name)
+
+            if not src.is_file():
+                yield emit(t0, "fatal", detail=f"src_path is not a file: {src}")
+                return
+
+            # Hash
+            yield emit(t0, "phase", phase="hash", message=f"hashing {src.name}")
+            try:
+                sha = sha256_file(src)
+            except ING.FileInaccessibleError as e:
+                yield emit(t0, "fatal", detail=f"locked/inaccessible: {e}")
+                return
+            yield emit(t0, "hash_done", sha256=sha)
+
+            # Dedupe scan
+            yield emit(t0, "phase", phase="dedupe", message="checking for duplicates")
+            for md in (vault_root / "meta").rglob("*.md"):
+                try:
+                    m = M.load(md)
+                except Exception:
+                    continue
+                if m.sha256 == sha:
+                    draft = DRAFTS.Draft(
+                        draft_id=DRAFTS.new_id(),
+                        src_path=str(src),
+                        sha256=sha,
+                        suggested_mode="reference",
+                        title=m.title,
+                        intro=m.intro,
+                        tags=list(m.tags),
+                        note=f"duplicate of existing record sha256={sha}",
+                        duplicate_of_sha256=sha,
+                    )
+                    DRAFTS.save(vault_root, draft)
+                    yield emit(t0, "duplicate",
+                               existing_sha256=sha,
+                               existing_title=m.title,
+                               draft_id=draft.draft_id)
+                    return
+
+            # Extract text
+            yield emit(t0, "phase", phase="extract_text",
+                       message=f"extracting text from {src.name}")
+            ext = EXT.extract_text(src, max_chars=cfg.llm.max_input_chars)
+            yield emit(t0, "extract_text_done",
+                       chars=len(ext.text),
+                       mime=ext.mime,
+                       truncated=ext.truncated,
+                       note=ext.note,
+                       preview=ext.text[:600])
+
+            # Maybe rasterize for vision
+            images: list[tuple[str, bytes]] = []
+            oc = cfg.llm.openai_compat
+            text_chars = len(ext.text.strip())
+            will_vision = (
+                cfg.llm.provider == "openai_compat"
+                and oc.local_multimodal
+                and text_chars < oc.vision_text_threshold
+            )
+            if will_vision:
+                yield emit(t0, "phase", phase="rasterize",
+                           message=f"rendering up to {oc.max_image_pages} pages "
+                                   f"@ longest-edge {oc.max_image_dim}px",
+                           max_pages=oc.max_image_pages,
+                           max_dim=oc.max_image_dim,
+                           text_chars=text_chars,
+                           threshold=oc.vision_text_threshold)
+                images = EXT.extract_images(
+                    src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
+                )
+                yield emit(t0, "rasterize_done",
+                           page_count=len(images),
+                           bytes_total=sum(len(b) for _, b in images))
+            else:
+                if cfg.llm.provider == "claude":
+                    reason = "provider is claude (text-only)"
+                elif not oc.local_multimodal:
+                    reason = "vision disabled (local_multimodal=false)"
+                else:
+                    reason = (f"extracted text is {text_chars} chars "
+                              f"(threshold {oc.vision_text_threshold}) — text alone is enough")
+                yield emit(t0, "decision", sending="text", reason=reason)
+
+            # LLM call
+            model_name = (
+                cfg.llm.claude.model if cfg.llm.provider == "claude"
+                else oc.model
+            )
+            base_url = oc.base_url if cfg.llm.provider == "openai_compat" else None
+            yield emit(t0, "phase", phase="llm_call",
+                       message=f"calling {cfg.llm.provider} ({model_name})"
+                               + (f" with {len(images)} image(s)" if images else " with text"),
+                       provider=cfg.llm.provider,
+                       model=model_name,
+                       base_url=base_url,
+                       image_count=len(images))
+
+            ai_title = ai_intro = ""
+            ai_tags: list[str] = []
+            err: str | None = None
+            try:
+                provider = get_provider(cfg)
+                draft_md = provider.extract_metadata(
+                    text=ext.text, mime=ext.mime, filename=src.name, note=ext.note,
+                    images=images or None,
+                    existing_tags=collect_existing_tags(vault_root),
+                )
+                ai_title = draft_md.get("title", "")
+                ai_intro = draft_md.get("intro", "")
+                ai_tags = list(draft_md.get("tags") or [])
+                yield emit(t0, "llm_call_done",
+                           title=ai_title, intro=ai_intro, tags=ai_tags)
+            except LLMError as e:
+                err = str(e)
+                yield emit(t0, "llm_error", error=err)
+
+            # Persist draft
+            suggested_mode: Literal["move", "reference"] = (
+                "reference" if P.is_protected_source(src) else "move"
+            )
+            draft = DRAFTS.Draft(
+                draft_id=DRAFTS.new_id(),
+                src_path=str(src),
+                sha256=sha,
+                suggested_mode=suggested_mode,
+                title=ai_title or Path(src.name).stem,
+                intro=ai_intro,
+                tags=ai_tags,
+                note=ext.note,
+                error=err,
+            )
+            DRAFTS.save(vault_root, draft)
+            yield emit(t0, "done",
+                       draft_id=draft.draft_id,
+                       suggested_mode=suggested_mode,
+                       title=draft.title,
+                       intro=draft.intro,
+                       tags=draft.tags)
+
+        return StreamingResponse(gen(), media_type="application/x-ndjson")
 
     @router.get("/draft/{draft_id}", response_model=DraftOut)
     def get_draft(draft_id: str) -> DraftOut:
@@ -564,7 +752,7 @@ def build_router(cfg: Config) -> APIRouter:
                         if (
                             cfg.llm.provider == "openai_compat"
                             and oc.local_multimodal
-                            and not ext.text.strip()
+                            and len(ext.text.strip()) < oc.vision_text_threshold
                         ):
                             images = EXT.extract_images(
                                 src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
@@ -647,7 +835,7 @@ def build_router(cfg: Config) -> APIRouter:
         if (
             cfg.llm.provider == "openai_compat"
             and oc.local_multimodal
-            and not ext.text.strip()
+            and len(ext.text.strip()) < oc.vision_text_threshold
         ):
             images = EXT.extract_images(
                 src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim

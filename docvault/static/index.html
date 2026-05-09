@@ -39,11 +39,13 @@
         <button value="entry_only">Delete database entry only<br><small>Keep the file untouched at its current location.</small></button>
         <button value="entry_and_file">Delete database entry and file<br><small>Move both to trash; recoverable for 90 days.</small></button>
         <button value="entry_and_reveal">Delete database entry, then reveal file in Explorer<br><small>Lets you handle the file yourself.</small></button>
+        <button value="entry_and_file_hard" class="danger">Straight delete (no trash)<br><small>Permanently delete the file. No recovery. Asks for confirmation.</small></button>
         <button value="cancel" class="cancel">Cancel</button>
       </div>
     </form>
   </dialog>
 
+  <script src="/static/theme.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/llm-status.js"></script>
 </body>

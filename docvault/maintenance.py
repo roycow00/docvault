@@ -126,9 +126,13 @@ def verify(cfg: Config, *, dry_run: bool = False) -> VerifyResult:
     res = VerifyResult()
     vault = cfg.vault_root
 
-    # Clean any leftover *.partial files in files/
-    files_root = vault / "files"
-    if files_root.is_dir():
+    # Clean any leftover *.partial files in the per-day archive folders
+    # (and the legacy files/ tree for vaults migrated from the older layout).
+    partial_roots: list[Path] = [vault / "files"]
+    partial_roots.extend(d for d in vault.glob("#Archived-*") if d.is_dir())
+    for files_root in partial_roots:
+        if not files_root.is_dir():
+            continue
         for partial in files_root.rglob("*.partial"):
             if dry_run:
                 res.cleaned_partials.append(partial)

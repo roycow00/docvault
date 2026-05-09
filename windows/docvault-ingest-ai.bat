@@ -34,29 +34,19 @@ if errorlevel 1 (
     exit /b 3
 )
 :ready
-echo [docvault-ai] server ready. asking LLM to draft metadata ...
+echo [docvault-ai] server ready. opening progress page ...
 
-REM POST to /api/ingest/ai. Pass the source path through DOCVAULT_SRC so we
-REM don't have to round-trip JSON (with embedded double quotes) through cmd's
-REM argument tokenizer — that mangles the body and the server returns 422.
+REM Open the streaming progress page directly. The page POSTs to
+REM /api/ingest/ai/stream itself and shows live status (elapsed time,
+REM phase, extracted-text preview, final LLM output) before redirecting
+REM to the edit form. We URL-encode the source path through DOCVAULT_SRC
+REM env var so unicode / spaces / quotes survive cmd's tokenizer.
 set "DOCVAULT_SRC=%~1"
-for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "try { $body = ConvertTo-Json -Compress -InputObject @{ src_path = $env:DOCVAULT_SRC }; $r = Invoke-RestMethod -Method Post -Uri '%BASE%/api/ingest/ai' -ContentType 'application/json' -Body $body; Write-Output $r.draft_id } catch { Write-Output '' }"`) do (
-    set "DRAFT=%%D"
+for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString($env:DOCVAULT_SRC)"`) do (
+    set "ENC=%%U"
 )
 set "DOCVAULT_SRC="
 
-if "%DRAFT%"=="" (
-    echo [docvault-ai] AI ingest failed; falling back to manual form.
-    set "DOCVAULT_SRC=%~1"
-    for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString($env:DOCVAULT_SRC)"`) do (
-        set "ENC=%%U"
-    )
-    set "DOCVAULT_SRC="
-    start "" "%BASE%/static/edit.html?src=!ENC!"
-    exit /b 0
-)
-
-echo [docvault-ai] opening review form for draft %DRAFT%
-start "" "%BASE%/static/edit.html?draft=%DRAFT%"
+start "" "%BASE%/static/ingest-ai.html?src=!ENC!"
 
 endlocal

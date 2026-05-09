@@ -83,7 +83,7 @@
       const tr = rows.querySelector(`tr[data-sha="${CSS.escape(highlight)}"]`);
       if (tr) {
         tr.scrollIntoView({ block: "center" });
-        tr.style.background = "#fef9c3";
+        tr.classList.add("just-saved");
       }
       highlight = null;
     }
@@ -137,6 +137,14 @@
       dlg.removeEventListener("close", once);
       const action = dlg.returnValue;
       if (!action || action === "cancel") return;
+      if (action === "entry_and_file_hard") {
+        const name = doc.title || doc.original_filename;
+        if (!confirm(
+          `Permanently delete "${name}" and its file?\n\n` +
+          `The file at:\n  ${doc.location.resolved}\n\n` +
+          `will be unlinked immediately. There is NO trash recovery for this option.`
+        )) return;
+      }
       const r = await fetch(`/api/docs/${encodeURIComponent(doc.sha256)}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },

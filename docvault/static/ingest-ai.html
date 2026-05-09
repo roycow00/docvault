@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>docvault — AI ingest</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/ingest-ai.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/static/index.html">&larr; back</a>
+    <h1>AI ingest</h1>
+    <span class="llm-status" id="llm-status" title="LLM provider status">checking LLM…</span>
+  </header>
+
+  <main class="ingest-progress">
+    <div class="hero">
+      <div class="filename" id="filename">…</div>
+      <div class="elapsed">
+        <span id="elapsed-num">0.0</span><span class="unit">s</span>
+      </div>
+      <div class="phase" id="phase">starting…</div>
+    </div>
+
+    <div id="banner" class="banner hidden"></div>
+
+    <section class="timeline">
+      <h2>Pipeline</h2>
+      <ol id="timeline"></ol>
+    </section>
+
+    <section id="decision-section" class="hidden">
+      <h2>What's being sent to the model</h2>
+      <div id="decision" class="decision"></div>
+      <details id="text-preview-wrap" class="preview hidden">
+        <summary>Extracted text preview</summary>
+        <pre id="text-preview"></pre>
+      </details>
+      <details id="vision-info" class="preview hidden">
+        <summary>Vision payload</summary>
+        <div id="vision-detail"></div>
+      </details>
+    </section>
+
+    <section id="result-section" class="hidden">
+      <h2>Model output</h2>
+      <div class="result">
+        <div class="result-row"><span class="lbl">Title</span><span id="r-title"></span></div>
+        <div class="result-row"><span class="lbl">Tags</span><span id="r-tags"></span></div>
+        <div class="result-row"><span class="lbl">Intro</span><span id="r-intro"></span></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/theme.js"></script>
+  <script src="/static/ingest-ai.js"></script>
+  <script src="/static/llm-status.js"></script>
+</body>
+</html>

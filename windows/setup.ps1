@@ -322,6 +322,20 @@ if ($existingCfg) {
     $writeCfg = Read-YesNo -Prompt "config.toml already exists at $cfgPath. Overwrite with new answers?" -Default "no"
 }
 
+# Drop an Internet Shortcut at the vault root so the user can double-click
+# their data folder and land in the web UI without remembering the port.
+# .url files are plain INI text — Windows treats them as clickable shortcuts
+# that open in the system default browser.
+$urlShortcut = Join-Path $VaultPath 'Open docvault.url'
+$urlBody = @"
+[InternetShortcut]
+URL=http://127.0.0.1:$Port/
+IconFile=$projectRoot\windows\docvault.ico
+IconIndex=0
+"@
+[System.IO.File]::WriteAllText($urlShortcut, $urlBody, [System.Text.UTF8Encoding]::new($false))
+Write-Host "[setup] wrote $urlShortcut"
+
 if ($writeCfg) {
     $vaultEsc = Esc-Toml $VaultPath
     $multimodalToml = if ($OpenAIMultimodal -eq 'yes') { 'true' } else { 'false' }
@@ -351,6 +365,18 @@ base_url         = "$oaiBaseEsc"
 model            = "$oaiModelEsc"
 api_key          = "ollama"
 local_multimodal = $multimodalToml
+# Vision quality levers (only when local_multimodal = true). See
+# config.example.toml for the full description and tradeoffs.
+max_image_pages       = 3
+max_image_dim         = 1280
+vision_text_threshold = 300
+
+# Optional: override the default summarization / tagging prompt.
+# See config.example.toml for the full explanation.
+# [llm.prompt]
+# system        = "You are a metadata-extraction assistant..."
+# taxonomy_hint = "Prefer existing tags..."
+# user_prefix   = "Reply in plain English."
 
 [ingest]
 on_duplicate   = "open_existing"

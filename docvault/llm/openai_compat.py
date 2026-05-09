@@ -20,7 +20,11 @@ import json
 
 from docvault.config import Config
 from docvault.llm.base import LLMError, MetadataDraft
-from docvault.llm.prompts import SYSTEM_PROMPT, TAXONOMY_HINT, user_message
+from docvault.llm.prompts import (
+    resolved_system_prompt,
+    resolved_taxonomy_hint,
+    user_message,
+)
 
 
 class OpenAICompatProvider:
@@ -35,6 +39,7 @@ class OpenAICompatProvider:
         self._client = OpenAI(base_url=oc.base_url, api_key=oc.api_key or "ollama")
         self._model = oc.model
         self._multimodal = oc.local_multimodal
+        self._prompt_cfg = cfg.llm.prompt
 
     def extract_metadata(
         self,
@@ -51,6 +56,7 @@ class OpenAICompatProvider:
             filename, mime, text, note,
             images_attached=has_images,
             existing_tags=existing_tags,
+            user_prefix=self._prompt_cfg.user_prefix if self._prompt_cfg else None,
         )
         if has_images:
             content: list[dict] = [{"type": "text", "text": user_text}]
@@ -63,8 +69,11 @@ class OpenAICompatProvider:
             user_msg: dict = {"role": "user", "content": content}
         else:
             user_msg = {"role": "user", "content": user_text}
+        sys_text = resolved_system_prompt(self._prompt_cfg)
+        tax_text = resolved_taxonomy_hint(self._prompt_cfg)
+        sys_combined = sys_text + ("\n\n" + tax_text if tax_text else "")
         msgs = [
-            {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + TAXONOMY_HINT},
+            {"role": "system", "content": sys_combined},
             user_msg,
         ]
 

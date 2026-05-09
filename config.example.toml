@@ -9,6 +9,10 @@ server_port = 7777
 
 [llm]
 provider        = "claude"             # "claude" | "openai_compat"
+# How many chars of extracted document text we hand to the LLM. Bigger
+# means better recall on long docs but linearly more tokens / latency /
+# cost, and on local models risks context-window overflow. Truncation is
+# 80% from the head + tail (see docvault/extract.py:_truncate).
 max_input_chars = 120000
 
 [llm.claude]
@@ -24,6 +28,31 @@ base_url         = "http://mac.local:11434/v1"
 model            = "qwen3:14b"
 api_key          = "ollama"
 local_multimodal = false
+
+# Vision quality levers — only used when local_multimodal = true.
+# The defaults are tuned to keep total ingest under ~25s on an M4 Mac Mini
+# running Qwen2.5-VL-7B at 32k context. Raise for better fidelity, lower
+# for shorter latency. Each rasterized page costs ~1500-2500 vision tokens
+# at max_image_dim=1280; LM Studio crashes if total tokens > loaded ctx.
+max_image_pages        = 3      # PDFs: rasterize at most this many pages
+max_image_dim          = 1280   # max longest-edge in px before downscale
+# Vision kicks in when the extracted text has *fewer* than this many
+# non-whitespace chars. 0 = strict "only when text is empty"; higher
+# values push more cases through vision (e.g. mostly-graphical PDFs whose
+# only OCR'd text is a page header).
+vision_text_threshold  = 300
+
+# [llm.prompt] — optional overrides for the strings sent to the LLM.
+# Uncomment any field to replace the built-in default for summarization /
+# tagging. Triple-quoted strings keep newlines intact. Leave the section out
+# entirely (or set a field to "") to fall back to the shipped default.
+#
+# [llm.prompt]
+# system = """You are a metadata-extraction assistant for my document vault.
+# Propose a short title, a 1-3 sentence intro, and 1-5 tags. Be conservative
+# and never invent facts."""
+# taxonomy_hint = "Prefer my existing tags: Tax, Medical, Travel, Receipt."
+# user_prefix = "Reply in plain English. Dates as YYYY-MM-DD."
 
 [ingest]
 on_duplicate   = "open_existing"       # "open_existing" | "skip" | "prompt"

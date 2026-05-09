@@ -1,6 +1,17 @@
-"""Shared prompt content for both LLM providers."""
+"""Shared prompt content for both LLM providers.
+
+The defaults below ship with docvault. Both can be overridden in config.toml
+under `[llm.prompt]` (see config.py:PromptCfg) — the providers call
+`resolved_system_prompt` / `resolved_taxonomy_hint` rather than the constants
+directly so config overrides take effect without restarting anything new.
+"""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from docvault.config import PromptCfg
 
 SYSTEM_PROMPT = """You are a metadata-extraction assistant for a personal document vault.
 
@@ -17,6 +28,18 @@ TAXONOMY_HINT = """The user's tag taxonomy includes (but is not limited to): Imm
 Use these when they clearly apply. Add specific tags (e.g. \"2025\", \"IRS\", a vendor name) only when they appear in the document content."""
 
 
+def resolved_system_prompt(prompt_cfg: "PromptCfg | None") -> str:
+    if prompt_cfg and prompt_cfg.system:
+        return prompt_cfg.system
+    return SYSTEM_PROMPT
+
+
+def resolved_taxonomy_hint(prompt_cfg: "PromptCfg | None") -> str:
+    if prompt_cfg and prompt_cfg.taxonomy_hint is not None:
+        return prompt_cfg.taxonomy_hint
+    return TAXONOMY_HINT
+
+
 def user_message(
     filename: str,
     mime: str,
@@ -25,8 +48,13 @@ def user_message(
     *,
     images_attached: bool = False,
     existing_tags: list[str] | None = None,
+    user_prefix: str | None = None,
 ) -> str:
-    parts = [f"Filename: {filename}", f"MIME: {mime}"]
+    parts: list[str] = []
+    if user_prefix:
+        parts.append(user_prefix)
+        parts.append("")
+    parts.extend([f"Filename: {filename}", f"MIME: {mime}"])
     if note:
         parts.append(f"Note: {note}")
     if existing_tags:

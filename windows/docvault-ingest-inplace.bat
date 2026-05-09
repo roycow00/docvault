@@ -36,29 +36,17 @@ if errorlevel 1 (
     exit /b 3
 )
 :ready
-echo [docvault-inplace] server ready. asking LLM to draft metadata ...
+echo [docvault-inplace] server ready. opening progress page ...
 
-REM POST to /api/ingest/ai (same as AI flow). The only difference vs the AI
-REM verb is we append &lockmode=reference to the URL so the edit form locks
-REM the storage radio.
+REM Same as the AI ingest, but we add &lockmode=reference so the edit form
+REM (which the progress page redirects to) locks the storage radio to
+REM "reference in place".
 set "DOCVAULT_SRC=%~1"
-for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "try { $body = ConvertTo-Json -Compress -InputObject @{ src_path = $env:DOCVAULT_SRC }; $r = Invoke-RestMethod -Method Post -Uri '%BASE%/api/ingest/ai' -ContentType 'application/json' -Body $body; Write-Output $r.draft_id } catch { Write-Output '' }"`) do (
-    set "DRAFT=%%D"
+for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString($env:DOCVAULT_SRC)"`) do (
+    set "ENC=%%U"
 )
 set "DOCVAULT_SRC="
 
-if "%DRAFT%"=="" (
-    echo [docvault-inplace] AI ingest failed; falling back to manual form, locked to in-place.
-    set "DOCVAULT_SRC=%~1"
-    for /f "usebackq delims=" %%U in (`powershell -NoProfile -Command "[uri]::EscapeDataString($env:DOCVAULT_SRC)"`) do (
-        set "ENC=%%U"
-    )
-    set "DOCVAULT_SRC="
-    start "" "%BASE%/static/edit.html?src=!ENC!&lockmode=reference"
-    exit /b 0
-)
-
-echo [docvault-inplace] opening review form for draft %DRAFT%, locked to in-place
-start "" "%BASE%/static/edit.html?draft=%DRAFT%&lockmode=reference"
+start "" "%BASE%/static/ingest-ai.html?src=!ENC!&lockmode=reference"
 
 endlocal

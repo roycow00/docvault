@@ -58,8 +58,22 @@ def test_ingest_reference_does_not_touch_source(vault: Path, src_file: Path) -> 
     assert res.metadata.location.path == str(src_file)
     assert src_file.is_file()
     assert _hash(src_file) == pre_hash
-    # No vault copy
-    assert not list((vault / "files").rglob("*"))
+    # No vault copy in any archive folder
+    assert not list(vault.glob("#Archived-*/*"))
+
+
+def test_ingest_move_lands_in_archive_folder(vault: Path, src_file: Path) -> None:
+    """Move-mode ingests put the file in <vault>/#Archived-YYYY-MM-DD/."""
+    res = ingest.ingest_manual(
+        src_file, {"title": "X"}, mode="move", vault_root=vault
+    )
+    assert res.target_path.is_file()
+    parent = res.target_path.parent
+    assert parent.parent == vault
+    assert parent.name.startswith("#Archived-")
+    # Date suffix is YYYY-MM-DD (10 chars)
+    suffix = parent.name[len("#Archived-"):]
+    assert len(suffix) == 10 and suffix[4] == "-" and suffix[7] == "-"
 
 
 def test_dedupe_returns_existing(vault: Path, src_file: Path, tmp_path: Path) -> None:
@@ -101,8 +115,11 @@ def test_fault_injection_preserves_source_content(
         pending = list((vault / ".pending-cleanup").rglob(f"*_{src_file.name}"))
         assert len(pending) == 1
         assert _hash(pending[0]) == pre_hash
-        # And the vault copy exists too
-        vault_copy = list((vault / "files").rglob(f"*_{src_file.name}"))
+        # And the vault copy exists too (under the per-day archive folder)
+        vault_copy = [
+            p for d in vault.glob("#Archived-*") if d.is_dir()
+            for p in d.rglob(f"*_{src_file.name}")
+        ]
         assert len(vault_copy) == 1
         assert _hash(vault_copy[0]) == pre_hash
 
@@ -110,11 +127,17 @@ def test_fault_injection_preserves_source_content(
 def test_partial_files_cleaned_after_copy_fault(
     vault: Path, src_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A fault after copy should not leave any .partial files in files/."""
+    """A fault after copy should not leave any .partial files in the vault."""
     monkeypatch.setenv("DOCVAULT_FAULT_INJECT", "copy")
     with pytest.raises(ingest.IngestFault):
         ingest.ingest_manual(src_file, {"title": "x"}, mode="move", vault_root=vault)
-    leftover = list((vault / "files").rglob("*.partial"))
+    leftover = [
+        p for d in (
+            *vault.glob("#Archived-*"),
+            vault / "files",
+        ) if d.is_dir()
+        for p in d.rglob("*.partial")
+    ]
     assert leftover == []
 
 

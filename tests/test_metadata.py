@@ -126,7 +126,7 @@ def test_paths_round_trip(vault: Path) -> None:
 
     abs_path = P.vault_path_for(vault, sha, name, dt)
     rel = P.to_relative_posix(abs_path.parent, vault)
-    assert rel == "files/2026-05"
+    assert rel == "#Archived-2026-05-04"
 
     loc = M.Location(type="vault", path=P.to_relative_posix(abs_path, vault))
     assert P.resolve(loc, vault) == abs_path.resolve() or P.resolve(loc, vault) == abs_path

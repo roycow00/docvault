@@ -32,6 +32,18 @@ def init_vault(
         )
         cfg_path.write_text(template, encoding="utf-8")
 
+    # Internet shortcut at the vault root that opens the UI in the default
+    # browser. Default port matches the value the freshly written
+    # config.toml uses — if the user later edits server_port, they can
+    # update this file too (or just delete it; nothing depends on it).
+    shortcut = target / "Open docvault.url"
+    if not shortcut.exists():
+        shortcut.write_text(
+            "[InternetShortcut]\n"
+            "URL=http://127.0.0.1:7777/\n",
+            encoding="utf-8",
+        )
+
     typer.echo(f"vault initialized at {target}")
     typer.echo(f"config: {cfg_path}")
 
@@ -233,7 +245,7 @@ def ingest_ai(
     if (
         cfg.llm.provider == "openai_compat"
         and oc.local_multimodal
-        and not ext.text.strip()
+        and len(ext.text.strip()) < oc.vision_text_threshold
     ):
         images = EXT.extract_images(
             src_resolved, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
@@ -311,6 +323,18 @@ base_url         = "http://localhost:11434/v1"
 model            = "qwen3:14b"
 api_key          = "ollama"
 local_multimodal = false
+# Vision quality levers (only when local_multimodal = true). See
+# config.example.toml for the full description and tradeoffs.
+max_image_pages       = 3
+max_image_dim         = 1280
+vision_text_threshold = 300
+
+# Optional: override the default summarization / tagging prompt. See
+# config.example.toml for the full explanation.
+# [llm.prompt]
+# system        = "You are a metadata-extraction assistant..."
+# taxonomy_hint = "Prefer existing tags..."
+# user_prefix   = "Reply in plain English."
 
 [ingest]
 on_duplicate   = "open_existing"
