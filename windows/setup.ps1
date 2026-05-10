@@ -306,7 +306,7 @@ if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 if (-not (Test-Path -LiteralPath $VaultPath)) {
     New-Item -ItemType Directory -Path $VaultPath -Force | Out-Null
 }
-foreach ($sub in 'files','meta','drafts','trash','.pending-cleanup','index','logs') {
+foreach ($sub in 'files','meta','drafts','trash','.pending-cleanup','index','logs','Important') {
     $d = Join-Path $VaultPath $sub
     if (-not (Test-Path -LiteralPath $d)) {
         New-Item -ItemType Directory -Path $d -Force | Out-Null

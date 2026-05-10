@@ -26,8 +26,21 @@ class ExtractResult:
 
 _TEXT_PREFIXES = ("text/", "application/json", "application/xml")
 
+# Extensions we treat as plain text even when mimetypes.guess_type() doesn't
+# return a text/* MIME. The OS registry on Windows often has no entry for
+# these formats, so without this fallback they'd fall through to the "no
+# extractor" branch and (with vision enabled) trigger a confusing "sending 0
+# rasterized pages" path.
+_TEXT_EXTENSIONS = {
+    ".toml", ".yaml", ".yml", ".ini", ".cfg", ".conf", ".log",
+    ".env", ".md", ".markdown", ".rst", ".properties",
+    ".csv", ".tsv",
+}
+
 
 def _guess_mime(path: Path) -> str:
+    if path.suffix.lower() in _TEXT_EXTENSIONS:
+        return "text/plain"
     mime, _ = mimetypes.guess_type(path.name)
     return mime or "application/octet-stream"
 

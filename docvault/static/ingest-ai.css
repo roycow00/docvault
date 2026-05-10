@@ -24,7 +24,7 @@
   margin-bottom: 0.6em;
 }
 .hero .elapsed {
-  font-size: 3.4em;
+  font-size: 1.6em;
   font-weight: 200;
   letter-spacing: -0.02em;
   color: var(--accent);
@@ -44,6 +44,20 @@
 }
 .hero.done .elapsed { color: var(--status-ok-text); }
 .hero.error .elapsed { color: var(--status-error-text); }
+
+.continue-wrap { margin-top: 1em; }
+.continue-btn {
+  display: inline-block;
+  padding: 0.55em 1.3em;
+  background: var(--accent);
+  color: white;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 1em;
+  font-weight: 500;
+}
+.continue-btn:hover { filter: brightness(1.1); }
 
 .timeline { padding: 0; }
 #timeline {

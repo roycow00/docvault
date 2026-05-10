@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <title>docvault — edit</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/app.css?v=7" />
 </head>
 <body>
   <header class="topbar">
@@ -15,46 +16,64 @@
   <main class="form">
     <div id="banner" class="banner hidden"></div>
 
-    <div class="row">
-      <label>Source</label>
-      <code id="source-path" class="path"></code>
-    </div>
+    <!-- Read-only details view: rendered for ?details=1, populated by edit.js. -->
+    <article id="details-view" class="details-view hidden"></article>
 
-    <fieldset id="storage-fs">
-      <legend>Storage</legend>
-      <label><input type="radio" name="mode" value="move" /> Move into vault</label>
-      <label><input type="radio" name="mode" value="reference" /> Reference in place</label>
-      <p class="hint" id="storage-hint"></p>
-    </fieldset>
+    <!-- Editable form: hidden when in details mode. -->
+    <div id="edit-form">
+      <div class="row">
+        <label>Source</label>
+        <code id="source-path" class="path"></code>
+      </div>
 
-    <div class="row">
-      <label for="title">
-        Title
-        <button type="button" id="suggest-ai" class="suggest-btn" title="Ask the LLM to draft a title, intro, and tags from the file contents">Suggest with AI</button>
-      </label>
-      <input id="title" type="text" />
-    </div>
+      <fieldset id="storage-fs">
+        <legend>Storage</legend>
+        <label><input type="radio" name="mode" value="move" /> Move into vault</label>
+        <label><input type="radio" name="mode" value="reference" /> Reference in place</label>
+        <p class="hint" id="storage-hint"></p>
+      </fieldset>
 
-    <div class="row">
-      <label for="tags">Tags</label>
-      <input id="tags" type="text" placeholder="Comma-separated, e.g. Tax, Finance, 2025" />
-      <p class="hint">Suggested: <span id="suggested-tags"></span></p>
-    </div>
+      <div class="row important-row">
+        <label class="checkbox-label" for="important">
+          <input type="checkbox" id="important" />
+          <span>⭐ Mark as important</span>
+        </label>
+        <p class="hint" id="important-hint">When stored in the vault, the file lands in <code>Important/</code> instead of the date-archive folder.</p>
+      </div>
 
-    <div class="row">
-      <label for="intro">Intro</label>
-      <textarea id="intro" rows="6" placeholder="A short description of this document."></textarea>
+      <div class="row">
+        <label for="title">
+          Title
+          <button type="button" id="suggest-ai" class="suggest-btn" title="Ask the LLM to draft a title, intro, and tags from the file contents">Suggest with AI</button>
+        </label>
+        <input id="title" type="text" />
+      </div>
+
+      <div class="row">
+        <label for="tags">Tags</label>
+        <input id="tags" type="text" placeholder="Comma-separated, e.g. Tax, Finance, 2025" />
+        <p class="hint">Suggested: <span id="suggested-tags"></span></p>
+      </div>
+
+      <div class="row">
+        <label for="intro">Intro</label>
+        <textarea id="intro" rows="6" placeholder="A short description of this document."></textarea>
+      </div>
     </div>
 
     <div class="row buttons">
       <button id="save" class="primary">Save</button>
+      <button id="edit-this" class="primary hidden">Edit this record</button>
       <button id="cancel">Cancel</button>
+      <button id="open-file" class="secondary hidden" type="button">Open file</button>
+      <button id="show-folder" class="secondary hidden" type="button">Show in folder</button>
       <button id="move-to-vault" class="secondary hidden">Move into vault now</button>
     </div>
   </main>
 
-  <script src="/static/theme.js"></script>
-  <script src="/static/edit.js"></script>
-  <script src="/static/llm-status.js"></script>
+  <script src="/static/theme.js?v=7"></script>
+  <script src="/static/toast.js?v=7"></script>
+  <script src="/static/edit.js?v=7"></script>
+  <script src="/static/llm-status.js?v=7"></script>
 </body>
 </html>

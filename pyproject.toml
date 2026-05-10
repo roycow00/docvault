@@ -34,7 +34,7 @@ docvault = "docvault.cli:app"
 include = ["docvault*"]
 
 [tool.setuptools.package-data]
-docvault = ["static/*.html", "static/*.js", "static/*.css"]
+docvault = ["static/*.html", "static/*.js", "static/*.css", "static/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

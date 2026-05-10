@@ -45,6 +45,11 @@ def _iter_sidecars(root: Path) -> Iterator[tuple[Path, Path]]:
     if not root.is_dir():
         return
     for sidecar in root.rglob("*.json"):
+        # Skip auxiliary marker files written by undo_ingest (e.g.
+        # `<uuid>.collision.json`). They live next to a real sidecar and
+        # don't themselves describe an orphaned/trashed file.
+        if sidecar.name.endswith(".collision.json"):
+            continue
         try:
             info = json.loads(sidecar.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -126,9 +131,10 @@ def verify(cfg: Config, *, dry_run: bool = False) -> VerifyResult:
     res = VerifyResult()
     vault = cfg.vault_root
 
-    # Clean any leftover *.partial files in the per-day archive folders
-    # (and the legacy files/ tree for vaults migrated from the older layout).
-    partial_roots: list[Path] = [vault / "files"]
+    # Clean any leftover *.partial files in the per-day archive folders,
+    # the Important/ folder, and the legacy files/ tree (for vaults migrated
+    # from the older layout).
+    partial_roots: list[Path] = [vault / "files", vault / "Important"]
     partial_roots.extend(d for d in vault.glob("#Archived-*") if d.is_dir())
     for files_root in partial_roots:
         if not files_root.is_dir():

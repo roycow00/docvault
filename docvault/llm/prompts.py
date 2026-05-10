@@ -18,9 +18,9 @@ SYSTEM_PROMPT = """You are a metadata-extraction assistant for a personal docume
 Given the contents (or a truncated excerpt) of a document, propose:
   - title:  a concise, human-readable title (max ~80 chars). Prefer the document's own title or subject line over a generic one.
   - intro:  one to three sentences describing what this document is, its purpose, and any key dates or parties involved. Plain text, no markdown.
-  - tags:   1-5 relevant tags chosen from the user's taxonomy when applicable, plus any natural keywords (e.g. years, jurisdictions). Prefer existing taxonomy entries.
+  - tags:   1-5 tags. Reuse the user's existing tags when they fit cleanly; if nothing in the existing set is a good fit, propose a new short tag (1-3 words, Title Case) that names the document's actual topic. A poorly-fitting existing tag is worse than a clean new one. Also include natural keywords like years or jurisdictions when they appear in the document.
 
-Be conservative: if you can't determine a field with reasonable confidence, leave the title as the filename and the intro empty. Don't invent facts."""
+Be conservative about title and intro: if you can't determine them with reasonable confidence, leave the title as the filename and the intro empty. Tags should still reflect the document's topic — don't return zero tags just because nothing in the existing set fits."""
 
 
 TAXONOMY_HINT = """The user's tag taxonomy includes (but is not limited to): Immigration, House, Shopping, School, Finance, Tax, Medical, Travel, Identity, Insurance, Legal, Receipt, Statement, Contract, Manual, Warranty.
@@ -62,8 +62,9 @@ def user_message(
         # still attending to instructions. Ordered by user's frequency of use.
         parts.append("")
         parts.append(
-            "User's existing tags (use these verbatim when applicable, in preference "
-            "to inventing new ones; ordered by frequency): "
+            "User's existing tags (reuse these verbatim when one fits the "
+            "document cleanly; if none fit well, propose a new short tag "
+            "instead of forcing a poor match; ordered by frequency): "
             + ", ".join(existing_tags)
         )
     parts.append("")
@@ -90,7 +91,7 @@ METADATA_TOOL_SCHEMA = {
         "tags": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "1-5 tags. Prefer the user's taxonomy.",
+            "description": "1-5 tags. Reuse the user's existing tags when one fits cleanly; otherwise propose a new short tag rather than force a poor match.",
         },
     },
     "required": ["title", "intro", "tags"],

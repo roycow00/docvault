@@ -3,11 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <title>docvault</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/app.css?v=7" />
 </head>
 <body>
   <header class="topbar">
     <h1>docvault</h1>
+    <button id="add-ingest" class="topbar-btn" title="Ingest a file or folder by path">+ Ingest…</button>
     <input id="search" type="search" placeholder="Search title, intro, tags…" autofocus />
     <span class="count" id="count"></span>
     <span class="llm-status" id="llm-status" title="LLM provider status">checking LLM…</span>
@@ -26,8 +28,28 @@
       </thead>
       <tbody id="rows"></tbody>
     </table>
-    <p id="empty" class="empty hidden">No documents yet. Use <code>docvault ingest &lt;file&gt;</code> on the command line, or right-click a file in Windows Explorer.</p>
+    <p id="empty-vault" class="empty hidden">No documents yet. Use <code>docvault ingest &lt;file&gt;</code> on the command line, or right-click a file in Windows Explorer.</p>
+    <p id="empty-search" class="empty hidden">No matches for &ldquo;<span id="empty-search-q"></span>&rdquo;.</p>
   </main>
+
+  <dialog id="ingest-dialog">
+    <form method="dialog" class="ingest-form">
+      <h2>Ingest a file or folder</h2>
+      <p class="hint">
+        Paste the absolute path. Tip: in Windows Explorer, hold <kbd>Shift</kbd>
+        and right-click the file, then choose &ldquo;Copy as path&rdquo;.
+      </p>
+      <input id="ingest-path" type="text" autocomplete="off" spellcheck="false"
+             placeholder='e.g. C:\Users\you\Downloads\receipt.pdf' />
+      <p id="ingest-error" class="hint error hidden"></p>
+      <div class="actions">
+        <button value="ai" class="primary">Ingest with AI</button>
+        <button value="manual">Ingest (no AI)</button>
+        <button value="folder">As folder</button>
+        <button value="cancel" class="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="delete-dialog">
     <form method="dialog">
@@ -45,8 +67,9 @@
     </form>
   </dialog>
 
-  <script src="/static/theme.js"></script>
-  <script src="/static/app.js"></script>
-  <script src="/static/llm-status.js"></script>
+  <script src="/static/theme.js?v=7"></script>
+  <script src="/static/toast.js?v=7"></script>
+  <script src="/static/app.js?v=7"></script>
+  <script src="/static/llm-status.js?v=7"></script>
 </body>
 </html>

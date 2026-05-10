@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <title>docvault — ingest folder</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/app.css?v=5" />
   <link rel="stylesheet" href="/static/folder.css" />
 </head>
 <body>
@@ -26,6 +27,7 @@
       <button id="select-none">Select none</button>
       <button id="expand-all">Expand all</button>
       <button id="collapse-all">Collapse all</button>
+      <span id="selection-stats" class="muted selection-stats">Nothing selected</span>
       <span class="spacer"></span>
       <label><input type="checkbox" id="use-ai" checked /> use AI to draft metadata</label>
       <fieldset class="inline-fs">
@@ -33,7 +35,7 @@
         <label><input type="radio" name="mode" value="reference" checked /> Reference in place</label>
         <label><input type="radio" name="mode" value="move" /> Move into vault</label>
       </fieldset>
-      <button id="ingest" class="primary">Ingest selected</button>
+      <button id="ingest" class="primary" disabled>Ingest selected</button>
     </div>
 
     <div id="tree" class="tree"></div>
@@ -48,8 +50,9 @@
     </section>
   </main>
 
-  <script src="/static/theme.js"></script>
-  <script src="/static/folder.js"></script>
-  <script src="/static/llm-status.js"></script>
+  <script src="/static/theme.js?v=6"></script>
+  <script src="/static/toast.js?v=6"></script>
+  <script src="/static/folder.js?v=6"></script>
+  <script src="/static/llm-status.js?v=6"></script>
 </body>
 </html>

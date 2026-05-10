@@ -47,9 +47,10 @@ class Metadata:
     location: Location
     mime: str
     size: int
+    important: bool = False
 
     def to_frontmatter_dict(self) -> dict:
-        return {
+        d = {
             "title": self.title,
             "tags": list(self.tags),
             "file_created": self.file_created,
@@ -60,6 +61,11 @@ class Metadata:
             "mime": self.mime,
             "size": self.size,
         }
+        # Only emit when set, so existing records don't grow a noisy
+        # `important: false` line on round-trip.
+        if self.important:
+            d["important"] = True
+        return d
 
     @classmethod
     def from_frontmatter(cls, fm: frontmatter.Post) -> "Metadata":
@@ -75,6 +81,7 @@ class Metadata:
             location=Location.from_dict(d["location"]),
             mime=d.get("mime", "application/octet-stream"),
             size=int(d.get("size", 0)),
+            important=bool(d.get("important", False)),
         )
 
 

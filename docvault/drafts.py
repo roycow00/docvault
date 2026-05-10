@@ -27,6 +27,9 @@ class Draft:
     # exists in the vault. The front end uses this to short-circuit the AI
     # draft form and jump straight to the existing record.
     duplicate_of_sha256: str | None = None
+    # User-controlled flag carried through from the AI draft form to finalize.
+    # When true and mode=move, the file lands in <vault>/Important/.
+    important: bool = False
 
 
 def _drafts_dir(vault_root: Path) -> Path:

@@ -65,6 +65,7 @@ class MetadataDraft(TypedDict, total=False):
     title: str
     intro: str
     tags: list[str]
+    important: bool
 
 
 @dataclass
@@ -100,7 +101,16 @@ def _find_duplicate(vault_root: Path, sha256: str) -> M.Metadata | None:
 
 
 def _atomic_copy(src: Path, dst: Path) -> None:
-    """Copy via .partial sibling, fsync, then atomic rename. Removes .partial on failure."""
+    """Copy via .partial sibling, fsync, then atomic rename. Removes .partial on failure.
+
+    Refuses to overwrite an existing dst — the vault path uses only the first
+    6 hex of the sha (24 bits) so two unrelated files with the same first-6
+    prefix and safe_name on the same day would otherwise silently clobber
+    each other (the dedupe scan upstream uses the full 64-char sha and
+    wouldn't catch this).
+    """
+    if dst.exists():
+        raise IngestError(f"vault destination already exists: {dst}")
     dst.parent.mkdir(parents=True, exist_ok=True)
     partial = dst.with_suffix(dst.suffix + ".partial")
     if partial.exists():
@@ -168,6 +178,7 @@ def _build_metadata(
     title = draft.get("title") or Path(src.name).stem
     intro = draft.get("intro") or ""
     tags = list(draft.get("tags") or [])
+    important = bool(draft.get("important", False))
     return M.Metadata(
         title=title,
         intro=intro,
@@ -179,6 +190,7 @@ def _build_metadata(
         location=location,
         mime=_guess_mime(src),
         size=src.stat().st_size,
+        important=important,
     )
 
 
@@ -220,7 +232,8 @@ def ingest_manual(
         return IngestResult(metadata=meta, meta_path=meta_path, target_path=src)
 
     # mode == "move"
-    target = P.vault_path_for(vault_root, sha, src.name, dt_ingested)
+    important = bool(draft.get("important", False))
+    target = P.vault_path_for(vault_root, sha, src.name, dt_ingested, important=important)
 
     # Step 3 — copy
     _atomic_copy(src, target)
@@ -299,6 +312,45 @@ def convert_to_managed(sha: str, *, vault_root: Path) -> IngestResult:
     )
 
 
+def relocate_for_important(m: M.Metadata, *, vault_root: Path) -> M.Metadata:
+    """Move a managed file between Important/ and #Archived-YYYY-MM-DD/ to
+    match its `important` flag. No-op for external/reference records (those
+    aren't in the vault, so the flag is metadata-only).
+
+    Within-vault file moves use Path.replace, which is an atomic rename on
+    the same volume. Refuses to overwrite an existing destination. Returns
+    the metadata with location.path updated; caller is responsible for
+    persisting it.
+    """
+    if m.location.type != "vault":
+        return m
+    cur_path = P.from_relative_posix(m.location.path, vault_root)
+    if not cur_path.is_file():
+        # File is missing from the vault entirely — nothing to relocate.
+        # The caller can still record the new flag value if they want.
+        return m
+
+    if m.important:
+        new_dir = P.vault_important_dir(vault_root)
+    else:
+        new_dir = P.vault_files_dir(vault_root, datetime.now())
+    new_dir.mkdir(parents=True, exist_ok=True)
+    new_path = new_dir / cur_path.name
+
+    if new_path.resolve() == cur_path.resolve():
+        return m  # already in the right folder
+
+    if new_path.exists():
+        raise IngestError(f"vault destination already exists: {new_path}")
+
+    cur_path.replace(new_path)
+    new_rel = P.to_relative_posix(new_path, vault_root)
+    return replace(
+        m,
+        location=M.Location(type="vault", path=new_rel, source=m.location.source),
+    )
+
+
 def undo_ingest(cleanup_id: str, *, vault_root: Path) -> Path:
     """Restore an orphaned source from .pending-cleanup/ back to its original path.
 
@@ -340,5 +392,6 @@ __all__ = [
     "Mode",
     "convert_to_managed",
     "ingest_manual",
+    "relocate_for_important",
     "undo_ingest",
 ]

@@ -56,7 +56,7 @@
   function tick() {
     if (stopClock) return;
     const t = (performance.now() - t0) / 1000;
-    elElapsed.textContent = t.toFixed(1);
+    elElapsed.textContent = Math.floor(t);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -118,6 +118,17 @@
     timelineMark(state);
     elHero.classList.add(state);
     elPhase.textContent = message;
+  }
+
+  function showContinue(url) {
+    const wrap = document.createElement("div");
+    wrap.className = "continue-wrap";
+    const btn = document.createElement("a");
+    btn.href = url;
+    btn.className = "continue-btn";
+    btn.textContent = "Continue to finalize →";
+    wrap.appendChild(btn);
+    elHero.appendChild(wrap);
   }
 
   async function run() {
@@ -214,12 +225,11 @@
 
       case "duplicate":
         finalize("done", "duplicate detected");
-        alert(
-          "Duplicate entry — this file is already in your vault.\n\n" +
-          "Existing title: " + (evt.existing_title || "(untitled)") + "\n\n" +
-          "Opening the existing record."
+        docvault.flash(
+          `Duplicate detected — opened existing record "${evt.existing_title || "(untitled)"}".`,
+          "info"
         );
-        location.replace("/static/edit.html?sha=" + encodeURIComponent(evt.existing_sha256));
+        location.replace("/static/edit.html?sha=" + encodeURIComponent(evt.existing_sha256) + "&details=1");
         break;
 
       case "fatal":
@@ -228,13 +238,15 @@
         break;
 
       case "done": {
-        finalize("done", `done in ${t.toFixed(1)}s`);
+        finalize("done", `done in ${Math.floor(t)}s`);
         let url = "/static/edit.html?draft=" + encodeURIComponent(evt.draft_id);
         if (lockMode === "reference" || lockMode === "move") {
           url += "&lockmode=" + encodeURIComponent(lockMode);
         }
-        // Brief pause so the user can see the final timing before redirect.
-        setTimeout(() => location.replace(url), 700);
+        // Don't auto-redirect: leave the timeline visible so the user can
+        // review what the model actually did. `location.href` (not replace)
+        // means the back button returns to this page from the edit form.
+        showContinue(url);
         break;
       }
 

@@ -49,12 +49,14 @@ class DocOut(BaseModel):
     location: LocationOut
     accessible: bool
     meta_path: str
+    important: bool = False
 
 
 class DraftIn(BaseModel):
     title: str = ""
     intro: str = ""
     tags: list[str] = Field(default_factory=list)
+    important: bool = False
 
 
 class IngestManualIn(BaseModel):
@@ -75,6 +77,7 @@ class UpdateIn(BaseModel):
     title: str
     intro: str
     tags: list[str]
+    important: bool = False
 
 
 class DeleteIn(BaseModel):
@@ -105,6 +108,7 @@ class DraftOut(BaseModel):
     note: str | None = None
     error: str | None = None
     duplicate_of_sha256: str | None = None
+    important: bool = False
 
 
 class FinalizeIn(BaseModel):
@@ -163,6 +167,13 @@ class LLMStatusOut(BaseModel):
     detail: str                 # short human-readable status line
 
 
+class SuggestedTagsOut(BaseModel):
+    # Ranked list, capped. Frontend renders these as one-click chips on the
+    # edit form so the user can extend their existing taxonomy without
+    # retyping.
+    suggested: list[str]
+
+
 # ---------- helpers ----------
 
 
@@ -187,6 +198,7 @@ def _to_out(m: M.Metadata, vault_root: Path, meta_path: Path) -> DocOut:
         ),
         accessible=accessible,
         meta_path=str(meta_path),
+        important=m.important,
     )
 
 
@@ -202,6 +214,7 @@ def _draft_to_out(d: "DRAFTS.Draft") -> "DraftOut":
         note=d.note,
         error=d.error,
         duplicate_of_sha256=d.duplicate_of_sha256,
+        important=d.important,
     )
 
 
@@ -251,12 +264,16 @@ def build_router(cfg: Config) -> APIRouter:
     @router.get("/docs", response_model=list[DocOut])
     def list_docs() -> list[DocOut]:
         out: list[DocOut] = []
-        for md in sorted((vault_root / "meta").rglob("*.md")):
+        for md in (vault_root / "meta").rglob("*.md"):
             try:
                 m = M.load(md)
             except Exception:
                 continue
             out.append(_to_out(m, vault_root, md))
+        # Newest-first by ingestion timestamp. The previous default was
+        # alphabetical by meta-path, which effectively grouped by YYYY-MM
+        # then filename and buried recently-ingested records.
+        out.sort(key=lambda d: d.ingested, reverse=True)
         return out
 
     @router.get("/docs/{sha256}", response_model=DocOut)
@@ -267,7 +284,22 @@ def build_router(cfg: Config) -> APIRouter:
     @router.put("/docs/{sha256}", response_model=DocOut)
     def update_doc(sha256: str, body: UpdateIn) -> DocOut:
         m, md = _find(vault_root, sha256)
-        updated = replace(m, title=body.title, intro=body.intro, tags=list(body.tags))
+        updated = replace(
+            m,
+            title=body.title,
+            intro=body.intro,
+            tags=list(body.tags),
+            important=bool(body.important),
+        )
+        # If the important flag changed on a managed (in-vault) record,
+        # physically move the file between Important/ and the date-archive
+        # folder. External references just record the flag; the source file
+        # stays where it is.
+        if updated.important != m.important and updated.location.type == "vault":
+            try:
+                updated = ING.relocate_for_important(updated, vault_root=vault_root)
+            except ING.IngestError as e:
+                raise HTTPException(status_code=500, detail=f"could not relocate: {e}")
         M.dump(md, updated)
         return _to_out(updated, vault_root, md)
 
@@ -317,7 +349,12 @@ def build_router(cfg: Config) -> APIRouter:
         try:
             res = ING.ingest_manual(
                 src,
-                {"title": body.metadata.title, "intro": body.metadata.intro, "tags": body.metadata.tags},
+                {
+                    "title": body.metadata.title,
+                    "intro": body.metadata.intro,
+                    "tags": body.metadata.tags,
+                    "important": bool(body.metadata.important),
+                },
                 mode=body.mode,
                 vault_root=vault_root,
             )
@@ -510,10 +547,12 @@ def build_router(cfg: Config) -> APIRouter:
             images: list[tuple[str, bytes]] = []
             oc = cfg.llm.openai_compat
             text_chars = len(ext.text.strip())
+            rasterizable = ext.mime == "application/pdf" or ext.mime.startswith("image/")
             will_vision = (
                 cfg.llm.provider == "openai_compat"
                 and oc.local_multimodal
                 and text_chars < oc.vision_text_threshold
+                and rasterizable
             )
             if will_vision:
                 yield emit(t0, "phase", phase="rasterize",
@@ -534,6 +573,9 @@ def build_router(cfg: Config) -> APIRouter:
                     reason = "provider is claude (text-only)"
                 elif not oc.local_multimodal:
                     reason = "vision disabled (local_multimodal=false)"
+                elif (text_chars < oc.vision_text_threshold) and not rasterizable:
+                    reason = (f"text is {text_chars} chars but no rasterizer for "
+                              f"{ext.mime} — sending text-only")
                 else:
                     reason = (f"extracted text is {text_chars} chars "
                               f"(threshold {oc.vision_text_threshold}) — text alone is enough")
@@ -619,6 +661,7 @@ def build_router(cfg: Config) -> APIRouter:
                     "title": body.metadata.title,
                     "intro": body.metadata.intro,
                     "tags": body.metadata.tags,
+                    "important": bool(body.metadata.important),
                 },
                 mode=body.mode,
                 vault_root=vault_root,
@@ -674,6 +717,17 @@ def build_router(cfg: Config) -> APIRouter:
         root = Path(body.root).expanduser().resolve()
         if not root.is_dir():
             raise HTTPException(status_code=400, detail=f"not a directory: {root}")
+        # Refuse to scan the vault itself or anything beneath it: a recursive
+        # rglob would surface every meta/, trash/, and #Archived-* file and
+        # tempt the user into ingesting the vault back into itself.
+        try:
+            root.relative_to(vault_root.resolve())
+            raise HTTPException(
+                status_code=400,
+                detail=f"refusing to scan inside the vault: {root}",
+            )
+        except ValueError:
+            pass  # not under vault_root — fine
 
         files: list[FolderFile] = []
         skipped: list[str] = []
@@ -922,6 +976,18 @@ def build_router(cfg: Config) -> APIRouter:
             provider=prov, model="(unknown)", connected=False,
             detail=f"unknown provider: {prov}",
         )
+
+    @router.get("/suggested-tags", response_model=SuggestedTagsOut)
+    def suggested_tags() -> SuggestedTagsOut:
+        """Tag chips for the edit form. Existing-vault tags ranked by
+        frequency, padded out with config-defined `suggested_tags` that
+        aren't already represented. Capped so the chip strip doesn't
+        wrap into a wall of pills."""
+        existing = collect_existing_tags(vault_root, max_tags=20)
+        seen = {t.lower() for t in existing}
+        extras = [t for t in cfg.ingest.suggested_tags if t.lower() not in seen]
+        combined = (existing + extras)[:12]
+        return SuggestedTagsOut(suggested=combined)
 
     @router.post("/open", response_model=OkOut)
     def open_(body: ShellIn) -> OkOut:

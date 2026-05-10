@@ -69,6 +69,14 @@ def vault_files_dir(vault_root: Path, dt: datetime) -> Path:
     return vault_root / f"#Archived-{_yyyymmdd(dt)}"
 
 
+def vault_important_dir(vault_root: Path) -> Path:
+    # Files marked `important` bypass the date-archive layout and live in a
+    # single flat folder so the user can scan them at a glance. Toggling
+    # the flag on an existing record relocates the file between this folder
+    # and the date-archive folder (see ingest.relocate_for_important).
+    return vault_root / "Important"
+
+
 def vault_meta_dir(vault_root: Path, dt: datetime) -> Path:
     return vault_root / "meta" / _yyyymm(dt)
 
@@ -85,8 +93,16 @@ def stem_for(sha256: str, original_name: str) -> str:
     return f"{sha256[:6]}_{safe_name(original_name)}"
 
 
-def vault_path_for(vault_root: Path, sha256: str, original_name: str, dt: datetime) -> Path:
-    return vault_files_dir(vault_root, dt) / stem_for(sha256, original_name)
+def vault_path_for(
+    vault_root: Path,
+    sha256: str,
+    original_name: str,
+    dt: datetime,
+    *,
+    important: bool = False,
+) -> Path:
+    parent = vault_important_dir(vault_root) if important else vault_files_dir(vault_root, dt)
+    return parent / stem_for(sha256, original_name)
 
 
 def meta_path_for(vault_root: Path, sha256: str, original_name: str, dt: datetime) -> Path:

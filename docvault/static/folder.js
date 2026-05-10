@@ -19,6 +19,7 @@
   const elSelNone = $("select-none");
   const elExpAll  = $("expand-all");
   const elColAll  = $("collapse-all");
+  const elSelStats = $("selection-stats");
 
   if (!root) {
     setBanner("No ?root= folder provided.", "error");
@@ -98,7 +99,9 @@
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
-    cb.checked = true;
+    // Default unchecked — selecting hundreds or thousands of files by
+    // accident is a footgun. Users opt in.
+    cb.checked = false;
     cb._node = node;
     cb.addEventListener("change", () => {
       // Cascade down
@@ -108,6 +111,7 @@
       });
       // Cascade up
       updateAncestorState(li);
+      updateSelectionStats();
     });
     row.appendChild(cb);
 
@@ -162,6 +166,23 @@
     return out;
   }
 
+  function updateSelectionStats() {
+    let count = 0, bytes = 0;
+    elTree.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      if (cb.checked && cb._node && cb._node.type === "file") {
+        count++;
+        bytes += cb._node.file.size;
+      }
+    });
+    if (count === 0) {
+      elSelStats.textContent = "Nothing selected";
+      elIngest.disabled = true;
+    } else {
+      elSelStats.textContent = `${count} file${count === 1 ? "" : "s"} (${fmtSize(bytes)}) selected`;
+      elIngest.disabled = false;
+    }
+  }
+
   async function load() {
     elTree.textContent = "scanning…";
     let scan;
@@ -194,10 +215,17 @@
     }
     const tree = buildTree(scan.files);
     renderTree(tree);
+    updateSelectionStats();
   }
 
-  elSelAll.addEventListener("click",  () => elTree.querySelectorAll('input[type="checkbox"]').forEach(c => { c.checked = true;  c.indeterminate = false; }));
-  elSelNone.addEventListener("click", () => elTree.querySelectorAll('input[type="checkbox"]').forEach(c => { c.checked = false; c.indeterminate = false; }));
+  elSelAll.addEventListener("click",  () => {
+    elTree.querySelectorAll('input[type="checkbox"]').forEach(c => { c.checked = true;  c.indeterminate = false; });
+    updateSelectionStats();
+  });
+  elSelNone.addEventListener("click", () => {
+    elTree.querySelectorAll('input[type="checkbox"]').forEach(c => { c.checked = false; c.indeterminate = false; });
+    updateSelectionStats();
+  });
   elExpAll.addEventListener("click",  () => elTree.querySelectorAll("li.collapsed").forEach(li => { li.classList.remove("collapsed"); const t = li.querySelector(":scope > .node > .toggle"); if (t && !t.classList.contains("empty")) t.textContent = "▾"; }));
   elColAll.addEventListener("click",  () => elTree.querySelectorAll("li").forEach(li => { if (li.querySelector(":scope > ul")) { li.classList.add("collapsed"); const t = li.querySelector(":scope > .node > .toggle"); if (t && !t.classList.contains("empty")) t.textContent = "▸"; } }));
 

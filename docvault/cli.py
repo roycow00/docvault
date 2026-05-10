@@ -21,7 +21,7 @@ def init_vault(
         typer.echo(f"refusing to init non-empty {target} (use --force)", err=True)
         raise typer.Exit(code=2)
 
-    for sub in ("files", "meta", "drafts", "trash", ".pending-cleanup", "index", "logs"):
+    for sub in ("files", "meta", "drafts", "trash", ".pending-cleanup", "index", "logs", "Important"):
         (target / sub).mkdir(parents=True, exist_ok=True)
 
     cfg_path = target / "config.toml"
@@ -80,6 +80,14 @@ def serve(
         raise typer.Exit(code=1)
 
     fastapi_app = create_app(cfg)
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        typer.echo(
+            f"WARNING: binding {host}:{bound_port} (non-loopback). The docvault "
+            "API has no authentication and grants read/write access to your "
+            "vault and any file the server user can reach. Use 127.0.0.1 "
+            "unless you know what you're doing.",
+            err=True,
+        )
     typer.echo(f"docvault serving at http://{host}:{bound_port}/  (vault: {cfg.vault_root})")
 
     with lockfile(cfg.vault_root, bound_port):

@@ -32,7 +32,10 @@ def cfg(vault: Path) -> Config:
 
 @pytest.fixture
 def client(cfg: Config) -> TestClient:
-    return TestClient(create_app(cfg))
+    # The CSRF middleware rejects requests whose Host header isn't loopback.
+    # TestClient defaults to base_url=http://testserver — pin it to 127.0.0.1
+    # so existing tests pass through untouched.
+    return TestClient(create_app(cfg), base_url="http://127.0.0.1")
 
 
 @pytest.fixture
@@ -274,8 +277,12 @@ def test_llm_status_claude_with_key(
     assert "API key configured" in body["detail"]
 
 
-def test_folder_scan_lists_files(client: TestClient, tmp_path: Path) -> None:
-    folder = tmp_path / "scanme"
+def test_folder_scan_lists_files(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    # Scan target lives *outside* the vault — the API refuses to scan inside
+    # the vault to prevent recursive self-ingest.
+    folder = tmp_path_factory.mktemp("scanme")
     (folder / "sub").mkdir(parents=True)
     (folder / "a.txt").write_text("alpha")
     (folder / "sub" / "b.pdf").write_bytes(b"%PDF-1.4")
@@ -289,18 +296,31 @@ def test_folder_scan_lists_files(client: TestClient, tmp_path: Path) -> None:
     assert body["truncated"] is False
 
 
-def test_folder_scan_rejects_nondir(client: TestClient, tmp_path: Path) -> None:
-    f = tmp_path / "single.txt"
+def test_folder_scan_rejects_nondir(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    base = tmp_path_factory.mktemp("scan_nondir")
+    f = base / "single.txt"
     f.write_text("x")
     r = client.post("/api/folder/scan", json={"root": str(f)})
     assert r.status_code == 400
 
 
-def test_folder_ingest_stream_no_ai(
+def test_folder_scan_refuses_inside_vault(
     client: TestClient, tmp_path: Path
 ) -> None:
-    folder = tmp_path / "batch"
-    folder.mkdir()
+    inside = tmp_path / "would_recurse"
+    inside.mkdir()
+    (inside / "x.txt").write_text("y")
+    r = client.post("/api/folder/scan", json={"root": str(inside)})
+    assert r.status_code == 400
+    assert "vault" in r.text.lower()
+
+
+def test_folder_ingest_stream_no_ai(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    folder = tmp_path_factory.mktemp("batch")
     (folder / "one.txt").write_text("one")
     (folder / "two.txt").write_text("two")
 
@@ -323,6 +343,28 @@ def test_folder_ingest_stream_no_ai(
     assert all(e["status"] == "ok" for e in events[:-1])
 
 
+def test_suggested_tags_combines_existing_and_config(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    src = tmp_path_factory.mktemp("inbox") / "doc.pdf"
+    src.write_bytes(b"%PDF-1.4\nbody\n" * 50)
+    # Ingest one record carrying tags so collect_existing_tags has something to find.
+    client.post(
+        "/api/ingest/manual",
+        json={"src_path": str(src), "metadata": {"title": "T", "tags": ["MyTag"]}, "mode": "reference"},
+    ).raise_for_status()
+
+    r = client.get("/api/suggested-tags")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    tags = body["suggested"]
+    # MyTag came from existing record; "Immigration" from default config suggested_tags.
+    assert "MyTag" in tags
+    assert "Immigration" in tags
+    # Cap at 12.
+    assert len(tags) <= 12
+
+
 def test_open_404_when_external_missing(
     client: TestClient, tmp_path: Path
 ) -> None:
@@ -337,3 +379,160 @@ def test_open_404_when_external_missing(
 
     r = client.post("/api/open", json={"sha256": sha})
     assert r.status_code == 404
+
+
+# ---------- CSRF / Host middleware ---------------------------------------
+
+def test_csrf_blocks_cross_origin_post(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    src = tmp_path_factory.mktemp("ext") / "x.txt"
+    src.write_text("hi")
+    r = client.post(
+        "/api/ingest/manual",
+        json={"src_path": str(src), "metadata": {"title": "X"}, "mode": "reference"},
+        headers={"Origin": "http://evil.example.com"},
+    )
+    assert r.status_code == 403
+
+
+def test_csrf_blocks_cross_site_sec_fetch(client: TestClient) -> None:
+    r = client.get("/api/docs", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+
+
+def test_csrf_allows_same_origin_with_explicit_headers(
+    client: TestClient,
+) -> None:
+    r = client.get(
+        "/api/docs",
+        headers={
+            "Origin": "http://127.0.0.1:0",  # cfg.server_port=0 in fixture
+            "Sec-Fetch-Site": "same-origin",
+        },
+    )
+    assert r.status_code == 200
+
+
+def test_csrf_allows_curl_like_no_origin(client: TestClient) -> None:
+    # Headless tools (curl, scripts) send neither Origin nor Sec-Fetch-Site.
+    # The middleware must let them through.
+    r = client.get("/api/docs")
+    assert r.status_code == 200
+
+
+def test_csrf_blocks_non_loopback_host(cfg: Config) -> None:
+    # DNS-rebinding defense: if Host header isn't loopback, refuse.
+    bad = TestClient(create_app(cfg), base_url="http://docvault.evil.example.com")
+    r = bad.get("/health")
+    assert r.status_code == 403
+
+
+def test_csrf_allows_static(client: TestClient) -> None:
+    # /static/ is fetched cross-origin by no one in practice (the UI is
+    # always same-origin), but a cross-origin GET to /static/index.html
+    # doesn't read user data — it's just the bundled UI assets. The
+    # middleware only protects /api/ + non-GET methods.
+    r = client.get(
+        "/static/index.html", headers={"Sec-Fetch-Site": "cross-site"}
+    )
+    assert r.status_code == 200
+
+
+# ---------- Important flag -----------------------------------------------
+
+def test_ingest_important_lands_in_important_folder(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory, vault: Path
+) -> None:
+    src = tmp_path_factory.mktemp("inbox") / "tax_return.pdf"
+    src.write_bytes(b"%PDF-1.4\nimportant body\n" * 50)
+
+    r = client.post(
+        "/api/ingest/manual",
+        json={
+            "src_path": str(src),
+            "metadata": {"title": "Tax Return", "important": True},
+            "mode": "move",
+        },
+    )
+    assert r.status_code == 200, r.text
+    sha = r.json()["sha256"]
+
+    # File lives under <vault>/Important/
+    important_dir = vault / "Important"
+    assert important_dir.is_dir()
+    files = list(important_dir.iterdir())
+    assert len(files) == 1
+    assert sha[:6] in files[0].name
+
+    # No #Archived-* folder was created
+    assert not list(vault.glob("#Archived-*"))
+
+    # DocOut surfaces important=true
+    doc = client.get(f"/api/docs/{sha}").json()
+    assert doc["important"] is True
+    assert "Important/" in doc["location"]["path"]
+
+
+def test_update_important_flag_relocates_managed_file(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory, vault: Path
+) -> None:
+    src = tmp_path_factory.mktemp("inbox") / "boring.pdf"
+    src.write_bytes(b"%PDF-1.4\nplain body\n" * 50)
+
+    sha = client.post(
+        "/api/ingest/manual",
+        json={"src_path": str(src), "metadata": {"title": "Plain"}, "mode": "move"},
+    ).json()["sha256"]
+
+    # File starts in #Archived-*
+    archived = list(vault.glob("#Archived-*/*"))
+    assert len(archived) == 1
+
+    # PUT important=true relocates the file into Important/
+    r = client.put(
+        f"/api/docs/{sha}",
+        json={"title": "Plain", "intro": "", "tags": [], "important": True},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["important"] is True
+    assert body["location"]["path"].startswith("Important/")
+    assert (vault / "Important").is_dir()
+    assert len(list((vault / "Important").iterdir())) == 1
+    # Original archived path is gone
+    assert not archived[0].exists()
+
+    # PUT important=false relocates it back into #Archived-{today}
+    r = client.put(
+        f"/api/docs/{sha}",
+        json={"title": "Plain", "intro": "", "tags": [], "important": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["important"] is False
+    assert not list((vault / "Important").iterdir())
+    assert len(list(vault.glob("#Archived-*/*"))) == 1
+
+
+def test_update_important_on_external_only_records_flag(
+    client: TestClient, tmp_path_factory: pytest.TempPathFactory, vault: Path
+) -> None:
+    src = tmp_path_factory.mktemp("ext") / "elsewhere.pdf"
+    src.write_bytes(b"%PDF-1.4\nstays put\n" * 50)
+
+    sha = client.post(
+        "/api/ingest/manual",
+        json={"src_path": str(src), "metadata": {"title": "Ext"}, "mode": "reference"},
+    ).json()["sha256"]
+
+    # Toggle important; file must NOT move (external/reference)
+    r = client.put(
+        f"/api/docs/{sha}",
+        json={"title": "Ext", "intro": "", "tags": [], "important": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["important"] is True
+    assert body["location"]["type"] == "external"
+    assert src.is_file()
+    assert not (vault / "Important").exists() or not list((vault / "Important").iterdir())
