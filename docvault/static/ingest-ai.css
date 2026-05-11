@@ -21,7 +21,51 @@
   font-size: 0.95em;
   color: var(--muted);
   word-break: break-all;
-  margin-bottom: 0.6em;
+  margin-bottom: 0.4em;
+}
+.hero .filename .basename { color: var(--fg); }
+.hero .filename .path-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent);
+}
+.hero .filename .path-link:hover { filter: brightness(1.15); }
+
+.source-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.7em;
+  margin: 0 0 0.9em;
+  font-size: 0.88em;
+}
+.source-actions .source-link,
+.source-actions .source-delete {
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.2;
+}
+.source-actions .source-link:hover,
+.source-actions .source-delete:hover { background: var(--row-hover); }
+.source-actions .source-link.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.source-actions .source-delete {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.source-actions .source-delete:hover { background: var(--banner-error-bg); }
+.source-actions .source-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--surface);
 }
 .hero .elapsed {
   font-size: 1.6em;

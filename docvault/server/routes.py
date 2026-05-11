@@ -97,6 +97,12 @@ class IngestAIIn(BaseModel):
     src_path: str
 
 
+class SourcePathIn(BaseModel):
+    # Used by the ingest progress page's "Open file" / "Delete instead"
+    # actions to act on the raw source path before any vault record exists.
+    src_path: str
+
+
 class DraftOut(BaseModel):
     draft_id: str
     src_path: str
@@ -562,12 +568,26 @@ def build_router(cfg: Config) -> APIRouter:
                            max_dim=oc.max_image_dim,
                            text_chars=text_chars,
                            threshold=oc.vision_text_threshold)
-                images = EXT.extract_images(
-                    src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
-                )
+                # Defensive: extract_images can raise (e.g., missing Pillow,
+                # corrupt PDF). Without this, the exception propagates out of
+                # the generator, FastAPI terminates the stream mid-flight, and
+                # the front end silently hangs on the rasterize phase forever.
+                try:
+                    images = EXT.extract_images(
+                        src, max_pages=oc.max_image_pages, max_dim=oc.max_image_dim
+                    )
+                except Exception as e:
+                    yield emit(t0, "fatal",
+                               detail=f"rasterize failed: {type(e).__name__}: {e}")
+                    return
                 yield emit(t0, "rasterize_done",
                            page_count=len(images),
                            bytes_total=sum(len(b) for _, b in images))
+                if not images:
+                    yield emit(t0, "fatal",
+                               detail="rasterize produced zero pages — "
+                                      "cannot send to vision model")
+                    return
             else:
                 if cfg.llm.provider == "claude":
                     reason = "provider is claude (text-only)"
@@ -1000,6 +1020,36 @@ def build_router(cfg: Config) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
         return OkOut(ok=True)
+
+    @router.post("/source/open", response_model=OkOut)
+    def source_open(body: SourcePathIn) -> OkOut:
+        """Open a raw source path with the OS default handler.
+
+        Used by the ingest progress page's clickable filename — at that
+        point there is no vault record yet, so /open (which requires a
+        sha256) doesn't apply.
+        """
+        src = Path(body.src_path).expanduser()
+        if not src.is_file():
+            raise HTTPException(status_code=404, detail=f"file not accessible: {src}")
+        try:
+            shell.open_default(src)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        return OkOut(ok=True)
+
+    @router.post("/source/delete", response_model=OkOut)
+    def source_delete(body: SourcePathIn) -> OkOut:
+        """Permanently delete a raw source file. The UI confirms with the
+        user before calling this — the server just executes."""
+        src = Path(body.src_path).expanduser()
+        if not src.is_file():
+            raise HTTPException(status_code=404, detail=f"file not accessible: {src}")
+        try:
+            src.unlink()
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"could not delete file: {e}")
+        return OkOut(ok=True, note=f"deleted {src}")
 
     return router
 
