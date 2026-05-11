@@ -89,7 +89,24 @@ if ($needsInstall) {
     Write-Host "==> pyproject.toml unchanged; skipping pip install."
 }
 
-# --- 5. Stop the running server ---------------------------------------------
+# --- 5. Re-register the autostart task if one is installed -------------------
+#
+# install-autostart.ps1 occasionally changes how the scheduled task is wired
+# (e.g. switching the launcher from cmd.exe to wscript.exe to stop a stray
+# console window from parking on the desktop after logon). Re-running the
+# installer here is idempotent (-Force on Register-ScheduledTask) and is the
+# only way users who set up via setup.ps1 on another machine pick those
+# changes up automatically.
+$existingTask = Get-ScheduledTask -TaskName 'Docvault Server (user logon)' -ErrorAction SilentlyContinue
+if ($existingTask) {
+    Write-Host "==> re-registering autostart scheduled task"
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'install-autostart.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "install-autostart.ps1 returned exit $LASTEXITCODE -- continuing."
+    }
+}
+
+# --- 6. Stop the running server ---------------------------------------------
 
 if ($NoRestart) {
     Write-Host "Done. (-NoRestart: not touching the server.)"
@@ -132,19 +149,25 @@ if (-not $stopped) {
 # Give Windows a tick to release the port before re-binding.
 Start-Sleep -Milliseconds 500
 
-# --- 6. Start the server via the existing launcher --------------------------
+# --- 7. Start the server via the existing launcher --------------------------
 
 $serverBat = Join-Path $ScriptDir 'docvault-server.bat'
 if (-not (Test-Path -LiteralPath $serverBat)) {
     throw "Missing $serverBat -- run windows\setup.ps1 to regenerate."
 }
+$vbsLauncher = Join-Path $ScriptDir 'launch-hidden.vbs'
+if (-not (Test-Path -LiteralPath $vbsLauncher)) {
+    throw "Missing $vbsLauncher -- run windows\setup.ps1 to regenerate."
+}
 
 Write-Host "==> starting docvault server (background)"
-# /B keeps cmd from spawning a visible window; the .bat itself uses
-# 'start "" /B pythonw' so the server detaches from this shell.
-& cmd.exe /c "`"$serverBat`""
+# Launch via wscript.exe + launch-hidden.vbs so the server detaches cleanly
+# from this shell. Going through `cmd /c <bat>` would tie the pythonw child's
+# inherited console to whatever invoked update.ps1, leaving an orphan window
+# (and killing the server if that shell closes).
+& wscript.exe $vbsLauncher $serverBat
 
-# --- 7. Health check --------------------------------------------------------
+# --- 8. Health check --------------------------------------------------------
 
 $port = $env:DOCVAULT_PORT
 if (-not $port) { $port = 7856 }
