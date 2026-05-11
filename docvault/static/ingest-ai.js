@@ -14,8 +14,6 @@
   const elTimeline = $("timeline");
   const elBanner = $("banner");
   const elHero = document.querySelector(".hero");
-  const elOpenSrc = $("open-src");
-  const elDeleteSrc = $("delete-src");
   const elDecisionSection = $("decision-section");
   const elDecision = $("decision");
   const elTextPreviewWrap = $("text-preview-wrap");
@@ -50,66 +48,6 @@
   }
 
   elFile.textContent = basename(src) + " — " + src;
-
-  // The streaming fetch's AbortController — captured here so "Delete instead"
-  // can cancel the in-flight request before unlinking the source file.
-  let streamCtrl = null;
-  let streamDone = false;
-
-  async function openSource() {
-    try {
-      const r = await fetch("/api/source/open", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ src_path: src }),
-      });
-      if (!r.ok) {
-        docvault.toast("Could not open file: " + await r.text(), "error", 5000);
-      }
-    } catch (e) {
-      docvault.toast("Could not open file: " + e.message, "error", 5000);
-    }
-  }
-
-  async function deleteSource() {
-    const name = basename(src);
-    const ok = confirm(
-      `Delete this file instead of ingesting it?\n\n` +
-      `  ${src}\n\n` +
-      `The file will be permanently removed. This cannot be undone.`
-    );
-    if (!ok) return;
-
-    // Cancel the in-flight stream so the server isn't trying to read a file
-    // we're about to unlink. Safe to abort even if the stream already finished.
-    if (streamCtrl && !streamDone) {
-      try { streamCtrl.abort(); } catch (_) { /* already done */ }
-    }
-
-    try {
-      const r = await fetch("/api/source/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ src_path: src }),
-      });
-      if (!r.ok) {
-        docvault.toast("Delete failed: " + await r.text(), "error", 6000);
-        return;
-      }
-      finalize("error", "deleted by user");
-      setBanner(`Deleted "${name}". You can close this tab or go back.`, "info");
-      elDeleteSrc.disabled = true;
-      elOpenSrc.classList.add("disabled");
-      docvault.flash(`Deleted "${name}".`, "success");
-      // Back to the index after a beat so the user can read the banner.
-      setTimeout(() => { location.replace("/static/index.html"); }, 1200);
-    } catch (e) {
-      docvault.toast("Delete failed: " + e.message, "error", 6000);
-    }
-  }
-
-  elOpenSrc.addEventListener("click", e => { e.preventDefault(); openSource(); });
-  elDeleteSrc.addEventListener("click", e => { e.preventDefault(); deleteSource(); });
 
   // Live elapsed-time clock. The server also sends `t` per event but the
   // local clock keeps the big counter ticking smoothly between events.
@@ -194,17 +132,14 @@
   }
 
   async function run() {
-    streamCtrl = new AbortController();
     let r;
     try {
       r = await fetch("/api/ingest/ai/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ src_path: src }),
-        signal: streamCtrl.signal,
       });
     } catch (e) {
-      if (e.name === "AbortError") return;  // user clicked "Delete instead"
       finalize("error", "request failed");
       setBanner("Could not reach the server: " + e.message, "error");
       return;
@@ -218,25 +153,19 @@
     const reader = r.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let idx;
-        while ((idx = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, idx).trim();
-          buf = buf.slice(idx + 1);
-          if (!line) continue;
-          let evt;
-          try { evt = JSON.parse(line); } catch { continue; }
-          handle(evt);
-        }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 1);
+        if (!line) continue;
+        let evt;
+        try { evt = JSON.parse(line); } catch { continue; }
+        handle(evt);
       }
-    } catch (e) {
-      if (e.name !== "AbortError") throw e;
-    } finally {
-      streamDone = true;
     }
   }
 

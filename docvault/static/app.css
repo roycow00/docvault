@@ -482,6 +482,11 @@ code, .path {
 }
 .buttons button.primary:hover { filter: brightness(1.1); }
 .buttons button.secondary { color: var(--accent); }
+.buttons button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.buttons button.danger:hover { background: var(--banner-error-bg); }
 
 /* ------------ details (read-only) view ------------
    Three-zone layout: hero (title/intro/tags), metadata grid, collapsed

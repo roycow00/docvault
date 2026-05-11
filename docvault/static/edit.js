@@ -28,6 +28,7 @@
   const elImportantHint = $("important-hint");
   const elOpenFile = $("open-file");
   const elShowFolder = $("show-folder");
+  const elDeleteSource = $("delete-source");
 
   let mode = "create";   // "create" | "edit-existing" | "create-from-draft"
   let existingDoc = null;
@@ -258,6 +259,10 @@
         elModeMove.checked = true;
         elStorageHint.textContent = "Move into vault is the default for files outside protected locations.";
       }
+      // Pre-save: surface "Open file" so the user can sanity-check the source,
+      // and "Delete instead" so they can bail out without ingesting.
+      elOpenFile.classList.remove("hidden");
+      elDeleteSource.classList.remove("hidden");
     } else if (draftId) {
       mode = "create-from-draft";
       const r = await fetch(`/api/draft/${encodeURIComponent(draftId)}`);
@@ -295,6 +300,11 @@
       } else {
         setBanner("Suggestions are AI-drafted — please review.", "info");
       }
+      // Pre-save: surface "Open file" so the user can cross-reference the
+      // AI output against the actual document, and "Delete instead" so they
+      // can bail out without ingesting.
+      elOpenFile.classList.remove("hidden");
+      elDeleteSource.classList.remove("hidden");
       // Stash draft id for save
       window._draftId = draftId;
     } else {
@@ -461,15 +471,51 @@
   });
 
   elOpenFile.addEventListener("click", async () => {
-    if (!existingDoc) return;
-    const r = await fetch("/api/open", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sha256: existingDoc.sha256 }),
-    });
+    // Existing record: open via the sha-based endpoint (resolves the file's
+    // vault location). Pre-save (create / create-from-draft): the file isn't
+    // in the vault yet — open the raw source path.
+    let r;
+    if (existingDoc) {
+      r = await fetch("/api/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sha256: existingDoc.sha256 }),
+      });
+    } else {
+      const path = currentSrcPath();
+      if (!path) { setBanner("No source path available.", "error"); return; }
+      r = await fetch("/api/source/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ src_path: path }),
+      });
+    }
     if (!r.ok) {
       setBanner("Could not open file: " + await r.text(), "error");
     }
+  });
+
+  elDeleteSource.addEventListener("click", async () => {
+    const path = currentSrcPath();
+    if (!path) { setBanner("No source path available.", "error"); return; }
+    const name = path.split(/[\\/]/).pop();
+    if (!confirm(
+      `Delete this file instead of ingesting it?\n\n` +
+      `  ${path}\n\n` +
+      `The file will be permanently removed. This cannot be undone.`
+    )) return;
+    const r = await fetch("/api/source/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ src_path: path }),
+    });
+    if (!r.ok) {
+      setBanner("Delete failed: " + await r.text(), "error");
+      return;
+    }
+    bypassUnloadGuard = true;  // suppress the unsaved-changes prompt
+    docvault.flash(`Deleted "${name}".`, "success");
+    location.href = "/static/index.html";
   });
 
   elShowFolder.addEventListener("click", async () => {

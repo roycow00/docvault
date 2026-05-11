@@ -23,47 +23,6 @@
   word-break: break-all;
   margin-bottom: 0.6em;
 }
-
-/* "Open file" / "Delete instead" buttons live inside the result panel,
-   so they appear only after the LLM has responded. */
-.source-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5em;
-  margin-top: 0.8em;
-  padding-top: 0.8em;
-  border-top: 1px dashed var(--line);
-  font-size: 0.88em;
-}
-.source-actions .source-link,
-.source-actions .source-delete {
-  padding: 0.3em 0.7em;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--surface);
-  color: var(--accent);
-  text-decoration: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: 1.2;
-}
-.source-actions .source-link:hover,
-.source-actions .source-delete:hover { background: var(--row-hover); }
-.source-actions .source-link.disabled {
-  pointer-events: none;
-  opacity: 0.5;
-}
-.source-actions .source-delete {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.source-actions .source-delete:hover { background: var(--banner-error-bg); }
-.source-actions .source-delete:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--surface);
-}
 .hero .elapsed {
   font-size: 1.6em;
   font-weight: 200;
