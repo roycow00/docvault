@@ -49,10 +49,7 @@
     return;
   }
 
-  // Render the filename + a clickable source-path link.
-  elFile.innerHTML =
-    `<span class="basename">${esc(basename(src))}</span>` +
-    ` — <a class="path-link" href="#" id="path-link">${esc(src)}</a>`;
+  elFile.textContent = basename(src) + " — " + src;
 
   // The streaming fetch's AbortController — captured here so "Delete instead"
   // can cancel the in-flight request before unlinking the source file.
@@ -112,9 +109,6 @@
   }
 
   elOpenSrc.addEventListener("click", e => { e.preventDefault(); openSource(); });
-  document.getElementById("path-link").addEventListener("click", e => {
-    e.preventDefault(); openSource();
-  });
   elDeleteSrc.addEventListener("click", e => { e.preventDefault(); deleteSource(); });
 
   // Live elapsed-time clock. The server also sends `t` per event but the

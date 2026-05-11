@@ -21,21 +21,18 @@
   font-size: 0.95em;
   color: var(--muted);
   word-break: break-all;
-  margin-bottom: 0.4em;
+  margin-bottom: 0.6em;
 }
-.hero .filename .basename { color: var(--fg); }
-.hero .filename .path-link {
-  color: var(--accent);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--accent);
-}
-.hero .filename .path-link:hover { filter: brightness(1.15); }
 
+/* "Open file" / "Delete instead" buttons live inside the result panel,
+   so they appear only after the LLM has responded. */
 .source-actions {
   display: flex;
-  justify-content: center;
-  gap: 0.7em;
-  margin: 0 0 0.9em;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 0.8em;
+  padding-top: 0.8em;
+  border-top: 1px dashed var(--line);
   font-size: 0.88em;
 }
 .source-actions .source-link,

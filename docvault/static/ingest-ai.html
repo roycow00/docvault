@@ -5,7 +5,7 @@
   <title>docvault — AI ingest</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="/static/app.css?v=6" />
-  <link rel="stylesheet" href="/static/ingest-ai.css?v=7" />
+  <link rel="stylesheet" href="/static/ingest-ai.css?v=8" />
 </head>
 <body>
   <header class="topbar">
@@ -17,10 +17,6 @@
   <main class="ingest-progress">
     <div class="hero">
       <div class="filename" id="filename">…</div>
-      <div class="source-actions">
-        <a class="source-link" id="open-src" href="#" title="Open with the OS default handler">📂 Open file</a>
-        <button class="source-delete" id="delete-src" type="button" title="Delete this file instead of ingesting it">🗑 Delete instead</button>
-      </div>
       <div class="elapsed">
         <span id="elapsed-num">0</span><span class="unit">s</span>
       </div>
@@ -54,12 +50,16 @@
         <div class="result-row"><span class="lbl">Tags</span><span id="r-tags"></span></div>
         <div class="result-row"><span class="lbl">Intro</span><span id="r-intro"></span></div>
       </div>
+      <div class="source-actions">
+        <a class="source-link" id="open-src" href="#" title="Open with the OS default handler">📂 Open file</a>
+        <button class="source-delete" id="delete-src" type="button" title="Delete this file instead of ingesting it">🗑 Delete instead</button>
+      </div>
     </section>
   </main>
 
   <script src="/static/theme.js?v=6"></script>
   <script src="/static/toast.js?v=6"></script>
-  <script src="/static/ingest-ai.js?v=7"></script>
+  <script src="/static/ingest-ai.js?v=8"></script>
   <script src="/static/llm-status.js?v=6"></script>
 </body>
 </html>
