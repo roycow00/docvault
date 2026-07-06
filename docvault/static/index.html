@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>docvault</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>docvault</h1>
+    <input id="search" type="search" placeholder="Search title, intro, tags, filename…" autofocus />
+    <span class="count" id="count"></span>
+  </header>
+
+  <main>
+    <table id="docs">
+      <thead>
+        <tr>
+          <th class="col-title sortable" data-sort="title">Title</th>
+          <th class="col-tags">Tags</th>
+          <th class="col-loc">Location</th>
+          <th class="col-date sortable" data-sort="ingested">Ingested</th>
+          <th class="col-size sortable" data-sort="size">Size</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty hidden"></p>
+  </main>
+
+  <footer class="statusbar" id="statusbar"></footer>
+
+  <dialog id="delete-dialog">
+    <form method="dialog">
+      <h2>Delete <span id="del-title"></span></h2>
+      <p class="muted">
+        <span id="del-loc-type"></span> &middot; <code id="del-path"></code>
+      </p>
+      <div class="actions">
+        <button value="entry_only">Delete entry only<br><small>Keep the file untouched at its current location.</small></button>
+        <button value="entry_and_file">Delete entry and file<br><small id="del-file-hint">Move both to trash; recoverable for 90 days.</small></button>
+        <button value="entry_and_reveal">Delete entry, then reveal file in Explorer<br><small>Lets you handle the file yourself.</small></button>
+        <button value="cancel" class="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

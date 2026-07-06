@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>docvault — edit</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/static/index.html">&larr; back</a>
+    <h1 id="page-title">Ingest document</h1>
+  </header>
+
+  <main class="form">
+    <div id="banner" class="banner hidden"></div>
+
+    <div class="row">
+      <label>Source</label>
+      <code id="source-path" class="path"></code>
+    </div>
+
+    <dl id="doc-details" class="doc-details hidden"></dl>
+
+    <fieldset id="storage-fs">
+      <legend>Storage</legend>
+      <label><input type="radio" name="mode" value="move" /> Move into vault</label>
+      <label><input type="radio" name="mode" value="reference" /> Reference in place</label>
+      <p class="hint" id="storage-hint"></p>
+    </fieldset>
+
+    <div class="row">
+      <label for="title">Title</label>
+      <input id="title" type="text" />
+    </div>
+
+    <div class="row">
+      <label for="tags">Tags</label>
+      <input id="tags" type="text" placeholder="Comma-separated, e.g. Tax, Finance, 2025" />
+      <p class="hint">Suggested: <span id="suggested-tags"></span></p>
+    </div>
+
+    <div class="row">
+      <label for="intro">Intro</label>
+      <textarea id="intro" rows="6" placeholder="A short description of this document."></textarea>
+    </div>
+
+    <div class="row buttons">
+      <button id="save" class="primary">Save</button>
+      <button id="cancel">Cancel</button>
+      <button id="move-to-vault" class="secondary hidden">Move into vault now</button>
+      <span class="kbd-hint">Ctrl+Enter to save</span>
+    </div>
+  </main>
+
+  <script src="/static/edit.js"></script>
+</body>
+</html>
