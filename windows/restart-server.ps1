@@ -88,7 +88,8 @@ Write-Host "==> starting docvault server (background)"
 
 # --- 4. Health check --------------------------------------------------------
 
-# Prefer the port from <vault>\config.toml; fall back to DOCVAULT_PORT, then 7856.
+# Prefer the port from <vault>\config.toml; fall back to DOCVAULT_PORT, then
+# 7777 (the default everywhere else: config.py, setup.ps1, the .bat verbs).
 $port = $null
 if ($vault) {
     $cfgPath = Join-Path $vault 'config.toml'
@@ -100,7 +101,7 @@ if ($vault) {
     }
 }
 if (-not $port -and $env:DOCVAULT_PORT) { $port = [int]$env:DOCVAULT_PORT }
-if (-not $port) { $port = 7856 }
+if (-not $port) { $port = 7777 }
 
 $ok = $false
 $deadline = (Get-Date).AddSeconds($HealthTimeoutSec)

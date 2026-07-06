@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from docvault import drafts as DRAFTS
 from docvault.config import Config
-from docvault.maintenance import purge_pending_cleanup, purge_trash, verify
+from docvault.maintenance import clean_stale_partials, purge_pending_cleanup, purge_trash
 from docvault.server.routes import build_router
 
 # 127.0.0.1 is not a security boundary against malicious websites — the
@@ -65,12 +65,14 @@ def create_app(cfg: Config) -> FastAPI:
         return await call_next(request)
 
     # Opportunistic startup maintenance: sweep stale drafts, retire old
-    # pending-cleanup and trash entries, and clean any *.partial debris.
+    # pending-cleanup and trash entries, and clean stale *.partial debris.
+    # (A full hash `verify` is intentionally NOT run here — it re-reads every
+    # byte in the vault and would stall startup; run `docvault verify` instead.)
     try:
         DRAFTS.sweep_expired(cfg.vault_root)
         purge_pending_cleanup(cfg)
         purge_trash(cfg)
-        verify(cfg, dry_run=False)
+        clean_stale_partials(cfg)
     except Exception:
         # Maintenance failures must not block server startup.
         pass

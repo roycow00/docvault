@@ -185,6 +185,16 @@ body {
   white-space: nowrap;
 }
 .topbar-btn:hover { background: var(--row-hover); }
+.topbar-btn.star-toggle {
+  /* the star glyph carries the meaning; mute it until active */
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.topbar-btn.star-toggle.active {
+  filter: none;
+  opacity: 1;
+  border-color: var(--accent);
+}
 
 dialog.ingest-form, .ingest-form {
   /* the .ingest-form selector targets the inner form too */
@@ -301,6 +311,10 @@ thead th {
   font-size: 0.85em;
   color: var(--muted);
 }
+thead th.sortable { cursor: pointer; user-select: none; }
+thead th.sortable:hover { color: var(--fg); }
+thead th.sortable.sorted::after { content: " 91"; }
+thead th.sortable.sorted.desc::after { content: " 93"; }
 tbody td {
   padding: 0.55em 0.8em;
   border-bottom: 1px solid var(--line);

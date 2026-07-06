@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import json
-import shutil
 import time
-import uuid
 from dataclasses import replace
-from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Literal
 
@@ -17,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from docvault import drafts as DRAFTS
 from docvault import extract as EXT
+from docvault import fsops
 from docvault import ingest as ING
 from docvault import metadata as M
 from docvault import paths as P
@@ -235,31 +233,6 @@ def _find(vault_root: Path, sha256: str) -> tuple[M.Metadata, Path]:
     raise HTTPException(status_code=404, detail=f"no record with sha256={sha256}")
 
 
-def _trash_file(vault_root: Path, file_path: Path, *, sha256: str, original_path: str | None = None) -> Path:
-    """Move a file into <vault>/trash/YYYY-MM/ with a sidecar JSON. Returns the destination."""
-    dt = datetime.now()
-    trash_root = P.trash_dir(vault_root, dt)
-    trash_root.mkdir(parents=True, exist_ok=True)
-    uid = uuid.uuid4().hex
-    dest = trash_root / f"{uid}_{P.safe_name(file_path.name)}"
-    sidecar = trash_root / f"{uid}.deleted.json"
-    shutil.move(str(file_path), str(dest))
-    sidecar.write_text(
-        json.dumps(
-            {
-                "uuid": uid,
-                "sha256": sha256,
-                "original_path": original_path or str(file_path),
-                "deleted_at": M.iso_now(),
-            },
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    return dest
-
-
 # ---------- router ----------
 
 
@@ -314,38 +287,42 @@ def build_router(cfg: Config) -> APIRouter:
         m, md = _find(vault_root, sha256)
         file_path = P.resolve(m.location, vault_root)
 
-        # Always move the .md to trash (with a sidecar that records the original path)
-        _trash_file(vault_root, md, sha256=sha256, original_path=str(md))
-
-        if body.action == "entry_only":
-            return OkOut(ok=True, note="entry deleted; file untouched")
-
+        # Handle the file first, the metadata entry last: as long as the
+        # entry exists, the file is discoverable. If the file operation
+        # fails, the record stays intact and the error surfaces.
+        note = "entry deleted; file untouched"
         if body.action == "entry_and_file":
             if file_path.is_file():
-                _trash_file(vault_root, file_path, sha256=sha256, original_path=str(file_path))
-                return OkOut(ok=True, note="entry and file moved to trash")
-            return OkOut(ok=True, note="entry deleted; file was already missing")
-
-        if body.action == "entry_and_file_hard":
-            # Permanent deletion — no trash buffer. The .md is already in
-            # trash from the unconditional move above, but the data file is
-            # unlinked outright. Front-end is responsible for the extra
-            # confirmation; the server just honours the request.
+                try:
+                    fsops.trash_file(vault_root, file_path, sha256=sha256, original_path=str(file_path))
+                except OSError as e:
+                    raise HTTPException(status_code=423, detail=f"could not move file to trash: {e}")
+                note = "entry and file moved to trash"
+            else:
+                note = "entry deleted; file was already missing"
+        elif body.action == "entry_and_file_hard":
+            # Permanent deletion — no trash buffer for the data file. The .md
+            # still goes to trash below. Front-end is responsible for the
+            # extra confirmation; the server just honours the request.
             if file_path.is_file():
                 try:
                     file_path.unlink()
                 except OSError as e:
                     raise HTTPException(status_code=500, detail=f"could not delete file: {e}")
-                return OkOut(ok=True, note="entry trashed; file permanently deleted")
-            return OkOut(ok=True, note="entry trashed; file was already missing")
+                note = "entry trashed; file permanently deleted"
+            else:
+                note = "entry trashed; file was already missing"
+
+        fsops.trash_file(vault_root, md, sha256=sha256, original_path=str(md))
 
         if body.action == "entry_and_reveal":
             if file_path.is_file():
                 shell.reveal(file_path)
-                return OkOut(ok=True, note="entry deleted; file revealed in explorer")
-            return OkOut(ok=True, note="entry deleted; file was missing — could not reveal")
+                note = "entry deleted; file revealed in explorer"
+            else:
+                note = "entry deleted; file was missing — could not reveal"
 
-        raise HTTPException(status_code=400, detail=f"unknown action: {body.action}")
+        return OkOut(ok=True, note=note)
 
     @router.post("/ingest/manual", response_model=IngestManualOut)
     def ingest_manual(body: IngestManualIn) -> IngestManualOut:

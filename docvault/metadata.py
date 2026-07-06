@@ -7,6 +7,7 @@ keep YAML diff-friendly (no `!!timestamp` tagging).
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,8 @@ from typing import Iterator, Literal
 
 import frontmatter
 import yaml
+
+from docvault.fsops import fsync_dir
 
 LocationType = Literal["vault", "external"]
 
@@ -117,9 +120,9 @@ def dump(meta_path: Path, m: Metadata) -> None:
         if not serialized.endswith("\n"):
             f.write("\n")
         f.flush()
-        import os
         os.fsync(f.fileno())
     tmp.replace(meta_path)
+    fsync_dir(meta_path.parent)
 
 
 def iter_all(vault_root: Path) -> Iterator[Metadata]:

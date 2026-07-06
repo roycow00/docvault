@@ -115,7 +115,9 @@ def load(explicit: Path | None = None) -> Config:
 
 
 def _from_file(path: Path) -> Config:
-    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    # utf-8-sig: tolerate a BOM from Windows editors (Notepad, PowerShell
+    # Out-File) that would otherwise make the first TOML key unparseable.
+    raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
     vault_root = raw.get("vault_root")
     if not vault_root:
         raise ConfigError(f"{path}: missing vault_root")

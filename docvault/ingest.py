@@ -26,13 +26,13 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
-import shutil
 import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from docvault import fsops
 from docvault import metadata as M
 from docvault import paths as P
 from docvault.hashing import FileInaccessibleError, sha256_file
@@ -100,54 +100,63 @@ def _find_duplicate(vault_root: Path, sha256: str) -> M.Metadata | None:
     return None
 
 
-def _atomic_copy(src: Path, dst: Path) -> None:
-    """Copy via .partial sibling, fsync, then atomic rename. Removes .partial on failure.
+def _claim_paths(
+    vault_root: Path,
+    sha256: str,
+    original_name: str,
+    dt: datetime,
+    *,
+    important: bool = False,
+) -> tuple[Path, Path]:
+    """Pick (target, meta) paths that don't clobber an existing record.
 
-    Refuses to overwrite an existing dst — the vault path uses only the first
-    6 hex of the sha (24 bits) so two unrelated files with the same first-6
-    prefix and safe_name on the same day would otherwise silently clobber
-    each other (the dedupe scan upstream uses the full 64-char sha and
-    wouldn't catch this).
-    """
-    if dst.exists():
-        raise IngestError(f"vault destination already exists: {dst}")
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    partial = dst.with_suffix(dst.suffix + ".partial")
-    if partial.exists():
-        partial.unlink()
-    try:
-        # copy2 preserves mtime; we re-open to fsync.
-        shutil.copy2(src, partial)
-        with partial.open("rb+") as f:
-            f.flush()
-            os.fsync(f.fileno())
-        partial.replace(dst)
-    except BaseException:
-        try:
-            partial.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+    The vault path uses only the first 6 hex of the sha (24 bits), so two
+    unrelated documents sharing a filename and prefix would collide; instead
+    of failing the ingest (or worse, overwriting), lengthen the prefix until
+    both paths are free. The full-sha rung cannot collide for distinct
+    content, so this always terminates for non-duplicates (dedupe upstream
+    already handled identical content)."""
+    for n in (6, 12, len(sha256)):
+        target = P.vault_path_for(
+            vault_root, sha256, original_name, dt, important=important, prefix_len=n
+        )
+        meta = P.meta_path_for(vault_root, sha256, original_name, dt, prefix_len=n)
+        if not target.exists() and not meta.exists():
+            return target, meta
+    raise IngestError(
+        f"cannot claim a vault path for sha256={sha256} name={original_name!r}: "
+        f"even the full-sha path is occupied; refusing to overwrite"
+    )
+
+
+def _claim_meta_path(
+    vault_root: Path, sha256: str, original_name: str, dt: datetime
+) -> Path:
+    for n in (6, 12, len(sha256)):
+        meta = P.meta_path_for(vault_root, sha256, original_name, dt, prefix_len=n)
+        if not meta.exists():
+            return meta
+    raise IngestError(
+        f"cannot claim a metadata path for sha256={sha256}; refusing to overwrite"
+    )
 
 
 def _orphan_source(src: Path, sha256: str, vault_root: Path, dt: datetime) -> str:
-    """Move the source to .pending-cleanup/ with a sidecar JSON. Returns the uuid."""
+    """Move the source to .pending-cleanup/ with a sidecar JSON. Returns the uuid.
+
+    The sidecar is written *before* the move so the entry (original path, sha)
+    is always discoverable even if we crash mid-move."""
     cleanup_id = uuid.uuid4().hex
     cleanup_dir = P.pending_cleanup_dir(vault_root, dt)
     cleanup_dir.mkdir(parents=True, exist_ok=True)
     target = cleanup_dir / f"{cleanup_id}_{P.safe_name(src.name)}"
     sidecar = cleanup_dir / f"{cleanup_id}.json"
 
-    # shutil.move: atomic rename within volume, copy+remove cross-volume.
-    # If cross-volume, the only window where two copies don't exist is between
-    # the inner os.unlink(src) and process exit — which is fine; we only delete
-    # the source after the vault copy is verified and metadata is written.
-    shutil.move(str(src), str(target))
     sidecar.write_text(
         json.dumps(
             {
                 "uuid": cleanup_id,
-                "original_path": str(src.resolve() if src.exists() else src),
+                "original_path": str(src),
                 "moved_to": str(target),
                 "sha256": sha256,
                 "ingested_at": M.iso_now(),
@@ -157,6 +166,9 @@ def _orphan_source(src: Path, sha256: str, vault_root: Path, dt: datetime) -> st
         ),
         encoding="utf-8",
     )
+    # safe_move: atomic rename same-volume; copy + hash-verify + delete otherwise
+    # (plain shutil.move would delete the source after an unverified copy).
+    fsops.safe_move(src, target)
     return cleanup_id
 
 
@@ -227,16 +239,18 @@ def ingest_manual(
             source=P.is_protected_source(src),
         )
         meta = _build_metadata(src=src, sha256=sha, draft=draft, location=location, dt_ingested=dt_ingested)
-        meta_path = P.meta_path_for(vault_root, sha, src.name, dt_ingested)
+        meta_path = _claim_meta_path(vault_root, sha, src.name, dt_ingested)
         _verified_meta_write(meta_path, meta)
         return IngestResult(metadata=meta, meta_path=meta_path, target_path=src)
 
     # mode == "move"
     important = bool(draft.get("important", False))
-    target = P.vault_path_for(vault_root, sha, src.name, dt_ingested, important=important)
+    target, meta_path = _claim_paths(
+        vault_root, sha, src.name, dt_ingested, important=important
+    )
 
     # Step 3 — copy
-    _atomic_copy(src, target)
+    fsops.atomic_copy(src, target)
     _fault("copy")
 
     # Step 4 — verify
@@ -254,7 +268,6 @@ def ingest_manual(
     rel = P.to_relative_posix(target, vault_root)
     location = M.Location(type="vault", path=rel)
     meta = _build_metadata(src=src, sha256=sha, draft=draft, location=location, dt_ingested=dt_ingested)
-    meta_path = P.meta_path_for(vault_root, sha, src.name, dt_ingested)
     _verified_meta_write(meta_path, meta)
     _fault("meta")
 
@@ -290,8 +303,12 @@ def convert_to_managed(sha: str, *, vault_root: Path) -> IngestResult:
         raise FileInaccessibleError(f"external file not found: {src}")
 
     dt_ingested = datetime.now()
-    target = P.vault_path_for(vault_root, sha, src.name, dt_ingested)
-    _atomic_copy(src, target)
+    # _claim_paths never returns an occupied path, so the old meta file (still
+    # on disk) can't be clobbered; it is deleted only after the new one is safe.
+    target, new_meta_path = _claim_paths(
+        vault_root, sha, src.name, dt_ingested, important=existing.important
+    )
+    fsops.atomic_copy(src, target)
     sha_target = sha256_file(target)
     if sha_target != sha:
         target.unlink(missing_ok=True)
@@ -299,7 +316,6 @@ def convert_to_managed(sha: str, *, vault_root: Path) -> IngestResult:
 
     rel = P.to_relative_posix(target, vault_root)
     promoted = replace(existing, location=M.Location(type="vault", path=rel))
-    new_meta_path = P.meta_path_for(vault_root, sha, src.name, dt_ingested)
     _verified_meta_write(new_meta_path, promoted)
     if new_meta_path != existing_meta_path:
         existing_meta_path.unlink(missing_ok=True)
@@ -352,11 +368,14 @@ def relocate_for_important(m: M.Metadata, *, vault_root: Path) -> M.Metadata:
 
 
 def undo_ingest(cleanup_id: str, *, vault_root: Path) -> Path:
-    """Restore an orphaned source from .pending-cleanup/ back to its original path.
+    """Restore an orphaned source from .pending-cleanup/ back to its original
+    path, then retire the vault copy and its metadata to trash/ (recoverable
+    for the trash retention window) so the ingest is fully reverted.
 
     If the original path is now occupied, the file is left in pending-cleanup
-    and a `.collision.json` marker is written; the function still returns the
-    pending-cleanup path so the caller can show a banner."""
+    and a `.collision.json` marker is written (which also shields the entry
+    from the retention purge); the function still returns the pending-cleanup
+    path so the caller can show a banner. The vault record is kept in that case."""
     cleanup_root = vault_root / ".pending-cleanup"
     sidecar = None
     for j in cleanup_root.rglob(f"{cleanup_id}.json"):
@@ -377,9 +396,34 @@ def undo_ingest(cleanup_id: str, *, vault_root: Path) -> Path:
         )
         return moved_to
     original.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(moved_to), str(original))
+    fsops.safe_move(moved_to, original)
     sidecar.unlink(missing_ok=True)
+
+    # Source is safely back — now retire the vault record. Failures here leave
+    # a harmless duplicate (source + vault copy), never a loss.
+    sha = info.get("sha256")
+    if sha:
+        try:
+            _retire_vault_record(vault_root, sha)
+        except OSError:
+            pass
     return original
+
+
+def _retire_vault_record(vault_root: Path, sha256: str) -> None:
+    """Move the managed file + metadata for `sha256` to trash/, if present."""
+    for md in (vault_root / "meta").rglob("*.md"):
+        try:
+            m = M.load(md)
+        except Exception:
+            continue
+        if m.sha256 != sha256 or m.location.type != "vault":
+            continue
+        target = P.resolve(m.location, vault_root)
+        if target.is_file():
+            fsops.trash_file(vault_root, target, sha256=sha256, original_path=str(target))
+        fsops.trash_file(vault_root, md, sha256=sha256, original_path=str(md))
+        return
 
 
 __all__ = [
