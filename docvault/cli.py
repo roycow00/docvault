@@ -63,6 +63,10 @@ def serve(
 
     cfg = load(config)
     bound_port = port or cfg.server_port
+    # The CSRF origin allowlist inside create_app is derived from
+    # cfg.server_port; keep it in sync with the port we actually bind, or a
+    # --port override 403s every browser request ("bad origin").
+    cfg.server_port = bound_port
 
     existing = existing_instance(cfg.vault_root, bound_port)
     if existing is not None:
@@ -127,6 +131,12 @@ def ingest(
     except FileInaccessibleError as e:
         typer.echo(f"cannot access source: {e}", err=True)
         raise typer.Exit(code=3)
+    except ING.IngestVerifyError as e:
+        typer.echo(f"ingest aborted, source untouched: {e}", err=True)
+        raise typer.Exit(code=4)
+    except ING.IngestError as e:
+        typer.echo(f"ingest failed: {e}", err=True)
+        raise typer.Exit(code=4)
 
     if res.duplicate_of is not None:
         typer.echo(f"duplicate: existing record sha256={res.metadata.sha256}")
@@ -146,7 +156,8 @@ def undo(
     cleanup_id: str = typer.Argument(..., help="UUID from `docvault ingest` output."),
     config: Path | None = typer.Option(None, "--config"),
 ) -> None:
-    """Restore a source file from .pending-cleanup/ back to its original path."""
+    """Fully revert an ingest: restore the source file to its original path
+    and move the vault copy + metadata to trash (recoverable)."""
     from docvault import ingest as ING
     from docvault.config import load
 
@@ -156,7 +167,13 @@ def undo(
     except ING.IngestError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=2)
-    typer.echo(f"restored to {restored}")
+    if ".pending-cleanup" in str(restored):
+        typer.echo(
+            "original path is occupied; file kept at "
+            f"{restored} (marked for manual attention, exempt from auto-purge)"
+        )
+    else:
+        typer.echo(f"restored to {restored}; vault copy moved to trash")
 
 
 @app.command()
@@ -171,10 +188,11 @@ def cleanup(
     cfg = load(config)
     res = purge_pending_cleanup(cfg, dry_run=dry_run)
     typer.echo(f"{'would remove' if dry_run else 'removed'}: {len(res.removed)} entries")
-    typer.echo(f"kept (within retention): {len(res.kept)} entries")
+    typer.echo(f"kept: {len(res.kept)} entries")
     if res.errors:
         for p, msg in res.errors:
-            typer.echo(f"  error: {p}: {msg}", err=True)
+            label = "note" if msg.startswith("kept:") else "error"
+            typer.echo(f"  {label}: {p}: {msg}", err=True)
 
 
 @app.command("empty-trash")

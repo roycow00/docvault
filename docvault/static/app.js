@@ -11,9 +11,15 @@
   const ingestPathInput = document.getElementById("ingest-path");
   const ingestError = document.getElementById("ingest-error");
   const addIngestBtn = document.getElementById("add-ingest");
+  const filterImportantBtn = document.getElementById("filter-important");
 
   let docs = [];
   let highlight = new URLSearchParams(location.search).get("highlight") || null;
+  // Server returns newest-first; sortKey=null preserves that order until the
+  // user clicks a header.
+  let sortKey = null;
+  let sortDir = 1;
+  let importantOnly = false;
 
   async function load() {
     try {
@@ -86,13 +92,29 @@
     }[c]));
   }
 
+  function compareDocs(a, b) {
+    let va = a[sortKey], vb = b[sortKey];
+    if (sortKey === "title") {
+      va = String(va || a.original_filename).toLowerCase();
+      vb = String(vb || b.original_filename).toLowerCase();
+    }
+    if (va < vb) return -1 * sortDir;
+    if (va > vb) return 1 * sortDir;
+    return 0;
+  }
+
   function applyFilter() {
     const qRaw = search.value.trim();
     const q = qRaw.toLowerCase();
-    const filtered = !q ? docs : docs.filter(d => {
-      const blob = (d.title + " " + (d.intro || "") + " " + (d.tags || []).join(" ")).toLowerCase();
+    let filtered = !q ? [...docs] : docs.filter(d => {
+      const blob = (
+        d.title + " " + (d.intro || "") + " " +
+        (d.tags || []).join(" ") + " " + (d.original_filename || "")
+      ).toLowerCase();
       return blob.includes(q);
     });
+    if (importantOnly) filtered = filtered.filter(d => d.important);
+    if (sortKey) filtered.sort(compareDocs);
     rows.innerHTML = filtered.map(rowHtml).join("");
     count.textContent = filtered.length === docs.length ? `${docs.length}` : `${filtered.length} / ${docs.length}`;
 
@@ -100,9 +122,9 @@
     // menu" guidance; a search that matched nothing wants the user to see
     // exactly what query they searched for so they can correct a typo.
     if (filtered.length === 0) {
-      if (q) {
+      if (q || importantOnly) {
         emptyVault.classList.add("hidden");
-        emptySearchQ.textContent = qRaw;
+        emptySearchQ.textContent = qRaw || (importantOnly ? "⭐ important" : "");
         emptySearch.classList.remove("hidden");
       } else {
         emptyVault.classList.remove("hidden");
@@ -135,6 +157,39 @@
   function render() { applyFilter(); }
 
   search.addEventListener("input", applyFilter);
+  search.addEventListener("keydown", ev => {
+    if (ev.key === "Escape" && search.value) {
+      ev.stopPropagation();
+      search.value = "";
+      applyFilter();
+    }
+  });
+
+  filterImportantBtn.addEventListener("click", () => {
+    importantOnly = !importantOnly;
+    filterImportantBtn.classList.toggle("active", importantOnly);
+    filterImportantBtn.setAttribute("aria-pressed", String(importantOnly));
+    applyFilter();
+  });
+
+  // Click a column header to sort; click again to flip direction. Title
+  // starts ascending (A→Z), date and size start descending (newest/biggest).
+  document.querySelectorAll("thead th.sortable").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (sortKey === key) {
+        sortDir = -sortDir;
+      } else {
+        sortKey = key;
+        sortDir = key === "title" ? 1 : -1;
+      }
+      document.querySelectorAll("thead th.sortable").forEach(el => {
+        el.classList.toggle("sorted", el === th);
+        el.classList.toggle("desc", el === th && sortDir === -1);
+      });
+      applyFilter();
+    });
+  });
 
   addIngestBtn.addEventListener("click", () => {
     ingestPathInput.value = "";
@@ -218,8 +273,13 @@
 
   function openDeleteDialog(doc) {
     document.getElementById("del-title").textContent = doc.title || doc.original_filename;
-    document.getElementById("del-loc-type").textContent = doc.location.type === "vault" ? "in vault" : "external file";
+    document.getElementById("del-loc-type").textContent = doc.location.type === "vault" ? "in vault" : "external file (reference)";
     document.getElementById("del-path").textContent = doc.location.resolved;
+    // The "entry and file" option behaves differently for references: the
+    // file it moves to trash is the EXTERNAL original, not a vault copy.
+    document.getElementById("del-file-hint").textContent = doc.location.type === "external"
+      ? "Moves the EXTERNAL original file into the vault trash; recoverable for 90 days."
+      : "Move both to trash; recoverable for 90 days.";
     dlg.returnValue = "";
     dlg.showModal();
 

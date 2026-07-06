@@ -141,6 +141,48 @@ def test_partial_files_cleaned_after_copy_fault(
     assert leftover == []
 
 
+def test_prefix_collision_never_overwrites_existing_vault_file(
+    vault: Path, src_file: Path
+) -> None:
+    """Two different documents whose sha256 shares the first 6 chars and whose
+    filenames match must not clobber each other — and the ingest must still
+    succeed (longer prefix), not fail."""
+    import hashlib as H
+    from datetime import datetime
+
+    from docvault import paths as P
+
+    sha = H.sha256(src_file.read_bytes()).hexdigest()
+    dt = datetime.now()
+    # Pre-occupy the 6-char-prefix target with *different* content
+    occupied = P.vault_path_for(vault, sha, src_file.name, dt)
+    occupied.parent.mkdir(parents=True, exist_ok=True)
+    occupied.write_bytes(b"a different document that happens to collide")
+    pre = occupied.read_bytes()
+
+    res = ingest.ingest_manual(src_file, {"title": "x"}, mode="move", vault_root=vault)
+    assert res.target_path != occupied
+    assert occupied.read_bytes() == pre, "existing vault file must be untouched"
+    assert res.target_path.is_file()
+    assert _hash(res.target_path) == sha
+
+
+def test_undo_ingest_retires_vault_record(vault: Path, src_file: Path) -> None:
+    """Undo restores the source AND removes the vault record (to trash)."""
+    res = ingest.ingest_manual(src_file, {"title": "x"}, mode="move", vault_root=vault)
+    vault_file = res.target_path
+    meta_file = res.meta_path
+    assert vault_file.is_file() and meta_file.is_file()
+
+    restored = ingest.undo_ingest(res.pending_cleanup_id, vault_root=vault)
+    assert restored.is_file()
+    # Vault copy + metadata retired to trash (recoverable), not deleted
+    assert not vault_file.exists()
+    assert not meta_file.exists()
+    trash_files = [p for p in (vault / "trash").rglob("*") if p.is_file()]
+    assert any(p.name.endswith(src_file.name) for p in trash_files)
+
+
 def test_undo_ingest_restores_source(vault: Path, src_file: Path) -> None:
     pre_hash = _hash(src_file)
     res = ingest.ingest_manual(src_file, {"title": "x"}, mode="move", vault_root=vault)

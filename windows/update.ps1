@@ -106,6 +106,27 @@ if ($existingTask) {
     }
 }
 
+# --- 5b. Refresh the Explorer context-menu verbs ------------------------------
+#
+# Updates sometimes ADD verbs (e.g. folder ingest, in-place ingest) or change
+# what a .bat does. Machines that ran setup.ps1 before such a change and only
+# ever run update.ps1 would otherwise never get the new right-click entries.
+# Re-registration is idempotent, so only skip it if the verbs were never
+# installed in the first place (respecting a setup-time -SkipContextMenu).
+# reg.exe, not the PS registry provider — see install-context-menu.ps1 for
+# why the literal '*' in the key path breaks the provider.
+& reg.exe query "HKCU\Software\Classes\*\shell\Docvault" /ve 2>$null | Out-Null
+$verbInstalled = ($LASTEXITCODE -eq 0)
+if ($verbInstalled) {
+    Write-Host "==> refreshing Explorer context-menu verbs"
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'install-context-menu.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "install-context-menu.ps1 returned exit $LASTEXITCODE -- continuing."
+    }
+} else {
+    Write-Host "==> context-menu verbs not installed; leaving as-is"
+}
+
 # --- 6. Stop the running server ---------------------------------------------
 
 if ($NoRestart) {
@@ -169,8 +190,21 @@ Write-Host "==> starting docvault server (background)"
 
 # --- 8. Health check --------------------------------------------------------
 
-$port = $env:DOCVAULT_PORT
-if (-not $port) { $port = 7856 }
+# Prefer the port from <vault>\config.toml (the value the server will actually
+# bind); fall back to DOCVAULT_PORT, then 7777 (the default everywhere else).
+# A wrong port here makes every update falsely report an unhealthy server.
+$port = $null
+if ($vault) {
+    $cfgPath = Join-Path $vault 'config.toml'
+    if (Test-Path -LiteralPath $cfgPath) {
+        $portLine = Select-String -Path $cfgPath -Pattern '^\s*server_port\s*=\s*(\d+)' -List
+        if ($portLine) {
+            $port = [int]$portLine.Matches[0].Groups[1].Value
+        }
+    }
+}
+if (-not $port -and $env:DOCVAULT_PORT) { $port = [int]$env:DOCVAULT_PORT }
+if (-not $port) { $port = 7777 }
 
 $ok = $false
 for ($i = 0; $i -lt 10; $i++) {

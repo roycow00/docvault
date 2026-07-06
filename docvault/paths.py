@@ -89,8 +89,8 @@ def trash_dir(vault_root: Path, dt: datetime) -> Path:
     return vault_root / "trash" / _yyyymm(dt)
 
 
-def stem_for(sha256: str, original_name: str) -> str:
-    return f"{sha256[:6]}_{safe_name(original_name)}"
+def stem_for(sha256: str, original_name: str, prefix_len: int = 6) -> str:
+    return f"{sha256[:prefix_len]}_{safe_name(original_name)}"
 
 
 def vault_path_for(
@@ -100,14 +100,17 @@ def vault_path_for(
     dt: datetime,
     *,
     important: bool = False,
+    prefix_len: int = 6,
 ) -> Path:
     parent = vault_important_dir(vault_root) if important else vault_files_dir(vault_root, dt)
-    return parent / stem_for(sha256, original_name)
+    return parent / stem_for(sha256, original_name, prefix_len)
 
 
-def meta_path_for(vault_root: Path, sha256: str, original_name: str, dt: datetime) -> Path:
+def meta_path_for(
+    vault_root: Path, sha256: str, original_name: str, dt: datetime, prefix_len: int = 6
+) -> Path:
     safe = safe_name(original_name)
-    base = f"{sha256[:6]}_{Path(safe).stem}.md"
+    base = f"{sha256[:prefix_len]}_{Path(safe).stem}.md"
     return vault_meta_dir(vault_root, dt) / base
 
 

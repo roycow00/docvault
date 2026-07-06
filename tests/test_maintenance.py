@@ -106,15 +106,78 @@ def test_verify_detects_hash_mismatch(vault: Path, src_file: Path) -> None:
     assert any(i.kind == "hash_mismatch" for i in out.issues)
 
 
-def test_verify_cleans_partial_debris(vault: Path) -> None:
+def test_verify_cleans_stale_partial_debris(vault: Path) -> None:
     files_dir = vault / "files" / "2026-05"
     files_dir.mkdir(parents=True)
     junk = files_dir / "abc_doc.pdf.partial"
     junk.write_bytes(b"junk")
+    old = time.time() - 7200  # older than PARTIAL_MIN_AGE_SECONDS
+    os.utime(junk, (old, old))
     cfg = _cfg(vault)
     out = verify(cfg)
     assert junk in out.cleaned_partials
     assert not junk.exists()
+
+
+def test_verify_keeps_fresh_partials(vault: Path) -> None:
+    """A fresh .partial may belong to an in-flight ingest and must survive."""
+    files_dir = vault / "#Archived-2026-05-01"
+    files_dir.mkdir(parents=True)
+    junk = files_dir / "abc_doc.pdf.partial"
+    junk.write_bytes(b"live ingest in another process")
+    cfg = _cfg(vault)
+    out = verify(cfg)
+    assert junk not in out.cleaned_partials
+    assert junk.exists()
+
+
+def test_purge_pending_keeps_last_copy_when_vault_copy_lost(
+    vault: Path, src_file: Path
+) -> None:
+    """If the vault copy has vanished, the expired pending entry is the last
+    copy of the document and must never be purged."""
+    res = ING.ingest_manual(src_file, {"title": "x"}, mode="move", vault_root=vault)
+    res.target_path.unlink()  # simulate vault copy loss (sync conflict, bit rot…)
+
+    old = time.time() - 100 * 86400
+    for p in (vault / ".pending-cleanup").rglob("*"):
+        if p.is_file():
+            os.utime(p, (old, old))
+
+    cfg = _cfg(vault, cleanup_days=30)
+    out = purge_pending_cleanup(cfg)
+    assert len(out.removed) == 0
+    assert len(out.kept) == 1
+    assert out.errors and "last copy" in out.errors[0][1]
+    pending = [
+        p for p in (vault / ".pending-cleanup").rglob("*")
+        if p.is_file() and p.suffix != ".json"
+    ]
+    assert len(pending) == 1
+
+
+def test_purge_pending_keeps_collision_marked_entries(
+    vault: Path, src_file: Path
+) -> None:
+    """Entries a failed undo flagged for manual attention are never purged."""
+    res = ING.ingest_manual(src_file, {"title": "x"}, mode="move", vault_root=vault)
+    # Occupy the original path so undo collides
+    src_file.write_bytes(b"squatter")
+    ING.undo_ingest(res.pending_cleanup_id, vault_root=vault)
+
+    old = time.time() - 100 * 86400
+    for p in (vault / ".pending-cleanup").rglob("*"):
+        if p.is_file():
+            os.utime(p, (old, old))
+
+    cfg = _cfg(vault, cleanup_days=30)
+    out = purge_pending_cleanup(cfg)
+    assert len(out.removed) == 0
+    pending = [
+        p for p in (vault / ".pending-cleanup").rglob("*")
+        if p.is_file() and not p.name.endswith(".json")
+    ]
+    assert len(pending) == 1
 
 
 def test_verify_external_unreachable(vault: Path, tmp_path: Path) -> None:
